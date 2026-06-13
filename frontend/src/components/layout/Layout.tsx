@@ -1,4 +1,4 @@
-import i18n from "@/i18n";
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { BarChart3, Bot, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2 } from "lucide-react";
@@ -11,15 +11,16 @@ import { ConnectionBanner } from "@/components/layout/ConnectionBanner";
 // Bump on each release; one place keeps the footer in sync with package.json.
 const APP_VERSION = "v0.1.9";
 
-const NAV = [
-  { to: "/", icon: BarChart3, label: i18n.t('layout.home') },
-  { to: "/agent", icon: Bot, label: i18n.t('layout.agent') },
-  { to: "/alpha-zoo", icon: Layers, label: i18n.t('layout.alphaZoo') },
-  { to: "/settings", icon: Settings, label: i18n.t('layout.settings') },
-  { to: "/correlation", icon: BarChart3, label: i18n.t('layout.correlation') },
-];
-
 export function Layout() {
+  const { t, i18n: i18nHook } = useTranslation();
+
+  const NAV = [
+    { to: "/", icon: BarChart3, label: t('layout.home') },
+    { to: "/agent", icon: Bot, label: t('layout.agent') },
+    { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
+    { to: "/settings", icon: Settings, label: t('layout.settings') },
+    { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
+  ];
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const { dark, toggle } = useDarkMode();
@@ -119,7 +120,7 @@ export function Layout() {
               <Link
                 to="/agent"
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                title={i18n.t('layout.newChat')}
+                title={t('layout.newChat')}
               >
                 <Plus className="h-3.5 w-3.5" />
               </Link>
@@ -133,7 +134,7 @@ export function Layout() {
                   ))}
                 </div>
               ) : sessions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground/60">{i18n.t('layout.noSessions')}</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground/60">{t('layout.noSessions')}</p>
               ) : null}
               {sessions.map((s) => {
                 const isActive = s.session_id === activeSessionId;
@@ -176,22 +177,22 @@ export function Layout() {
                     )}
                     {!isRenaming && isDeleting ? (
                       <div className="absolute right-0.5 flex items-center gap-0.5">
-                        <button onClick={() => deleteSession(s.session_id)} className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium">{i18n.t('layout.confirm')}</button>
-                        <button onClick={() => setDeleteTarget(null)} className="p-1 text-muted-foreground hover:bg-muted rounded text-[10px]">{i18n.t('layout.cancel')}</button>
+                        <button onClick={() => deleteSession(s.session_id)} className="p-1 text-danger hover:bg-danger/10 rounded text-[10px] font-medium">{t('layout.confirm')}</button>
+                        <button onClick={() => setDeleteTarget(null)} className="p-1 text-muted-foreground hover:bg-muted rounded text-[10px]">{t('layout.cancel')}</button>
                       </div>
                     ) : !isRenaming ? (
                       <div className="absolute right-1 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
                         <button
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenameTarget(s.session_id); setRenameValue(s.title || ""); }}
                           className="p-1 text-muted-foreground hover:text-foreground rounded"
-                          title={i18n.t('layout.rename')}
+                          title={t('layout.rename')}
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(s.session_id); }}
                           className="p-1 text-muted-foreground hover:text-danger rounded"
-                          title={i18n.t('layout.delete')}
+                          title={t('layout.delete')}
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -211,10 +212,10 @@ export function Layout() {
         <div className={cn("border-t", collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2")}>
           {collapsed ? (
             <>
-              <button onClick={toggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={dark ? i18n.t('layout.light') : i18n.t('layout.dark')}>
+              <button onClick={toggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={dark ? t('layout.light') : t('layout.dark')}>
                 {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               </button>
-              <button onClick={() => setCollapsed(false)} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={i18n.t('layout.expand')}>
+              <button onClick={() => setCollapsed(false)} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={t('layout.expand')}>
                 <ChevronsRight className="h-3.5 w-3.5" />
               </button>
             </>
@@ -232,20 +233,19 @@ export function Layout() {
                   <button
                     onClick={() => setCollapsed(true)}
                     className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
-                    title={i18n.t('layout.collapse')}
+                    title={t('layout.collapse')}
                   >
                     <ChevronsLeft className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <button onClick={() => { i18n.changeLanguage(i18n.language === "zh-CN" ? "en" : "zh-CN"); }} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"><Languages className="h-3.5 w-3.5" />{i18n.language === "zh-CN" ? "English" : "中文"}</button>
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => { i18n.changeLanguage(i18n.language === "zh-CN" ? "en" : "zh-CN"); }}
+                  onClick={() => { i18nHook.changeLanguage(i18nHook.language === "zh-CN" ? "en" : "zh-CN"); }}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Languages className="h-3.5 w-3.5" />
-                  {i18n.language === "zh-CN" ? "English" : "中文"}
+                  {i18nHook.language === "zh-CN" ? "English" : "中文"}
                 </button>
                 <p className="text-xs text-muted-foreground/60">{APP_VERSION}</p>
               </div>
