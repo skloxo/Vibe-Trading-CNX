@@ -35,13 +35,10 @@ from src.tools.trade_journal_tool import pair_trades_fifo
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_MARKETS: tuple[str, ...] = ("china_a", "hk", "us", "crypto")
+SUPPORTED_MARKETS: tuple[str, ...] = ("china_a",)
 
 _LIQUID_BASKETS: dict[str, list[str]] = {
     "china_a": ["600519.SH", "000858.SZ", "300750.SZ", "600036.SH", "000001.SZ"],
-    "hk":      ["00700.HK", "09988.HK", "03690.HK", "00388.HK", "01810.HK"],
-    "us":      ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"],
-    "crypto":  ["BTC-USDT", "ETH-USDT", "SOL-USDT", "BNB-USDT", "XRP-USDT"],
 }
 
 

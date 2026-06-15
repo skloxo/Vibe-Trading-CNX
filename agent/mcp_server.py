@@ -2,9 +2,9 @@
 """Vibe-Trading MCP Server — expose finance research tools to any MCP client.
 
 Works with OpenClaw, Claude Desktop, Cursor, and any MCP-compatible client.
-Zero API key required for HK/US/crypto research markets (yfinance, OKX,
-AKShare are free). Trading connector tools are profile-scoped and require the
-selected connector's own local app or OAuth setup.
+Supports China A-share data sources (tushare, baostock, tencent, akshare, mootdx).
+Trading connector tools are profile-scoped and require the selected connector's
+own local app or OAuth setup.
 
 Surfaces 54 tools: skills, research goals, backtest/factor/options/pattern
 analysis, market data, fundamentals & capital-flow & news & discovery
@@ -1043,23 +1043,21 @@ def get_market_data(
     interval: str = "1D",
     max_rows: int = DEFAULT_MAX_ROWS,
 ) -> str:
-    """Fetch OHLCV market data for stocks, crypto, or mixed symbols.
+    """Fetch OHLCV market data for A-share stocks and indices.
 
     Supported sources:
-    - "yfinance": HK/US equities (free, e.g. AAPL.US, 700.HK)
-    - "okx": cryptocurrency (free, e.g. BTC-USDT, ETH-USDT)
     - "tushare": China A-shares (requires TUSHARE_TOKEN, e.g. 000001.SZ)
     - "baostock": China A-shares via TCP protocol, bypasses HTTP CDN blocks (e.g. 000001.SZ, 601595.SH)
     - "tencent": China A-shares via Tencent Finance API (e.g. 000001.SZ, 601595.SH)
-    - "akshare": A-shares, US, HK, futures, forex (free, e.g. 000001.SZ, AAPL.US)
-    - "ccxt": crypto from 100+ exchanges (free, e.g. BTC/USDT)
+    - "akshare": A-shares, futures, forex (free, e.g. 000001.SZ)
+    - "mootdx": A-shares via Tongdaxin direct (free, e.g. 000001.SZ)
     - "auto": auto-detect based on symbol format (with fallback)
 
     Args:
-        codes: List of symbols (e.g. ["AAPL.US", "BTC-USDT", "000001.SZ"]).
+        codes: List of symbols (e.g. ["000001.SZ", "600519.SH"]).
         start_date: Start date (YYYY-MM-DD).
         end_date: End date (YYYY-MM-DD).
-        source: Data source ("auto", "yfinance", "okx", "tushare", "baostock", "tencent", "akshare", "ccxt").
+        source: Data source ("auto", "tushare", "akshare", "mootdx", "baostock", "tencent").
         interval: Bar size (1m/5m/15m/30m/1H/4H/1D, default "1D").
         max_rows: Per-symbol row cap (default 250) so the response stays
             within the MCP token budget. A symbol exceeding it returns an
@@ -1804,7 +1802,7 @@ def run_shadow_backtest(
     markets: list[str] | None = None,
     journal_path: str = "",
 ) -> str:
-    """Run a multi-market backtest (A股/港股/美股/crypto) on a Shadow Account
+    """Run a backtest on a Shadow Account
     profile and compute delta-PnL attribution vs the user's realized trades.
 
     Requires `extract_shadow_strategy` to have run first.
@@ -1813,7 +1811,7 @@ def run_shadow_backtest(
         shadow_id: ID returned by extract_shadow_strategy.
         window_start: ISO date, default today-1y.
         window_end: ISO date, default today.
-        markets: Subset of ["china_a", "hk", "us", "crypto"], default all four.
+        markets: Subset of ["china_a"], default china_a only.
         journal_path: Original journal path (enables attribution), optional.
     """
     registry = _get_registry()

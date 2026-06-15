@@ -14,8 +14,8 @@ class MarketDataTool(BaseTool):
     name = "get_market_data"
     description = (
         "Fetch normalized OHLCV market data through the repository loader layer. "
-        "Use this for stock, ETF, index, or crypto price bars before writing raw "
-        "yfinance/OKX/Tushare scripts."
+        "Use this for stock, ETF, or index price bars before writing raw "
+        "data source scripts."
     )
     parameters = {
         "type": "object",
@@ -23,7 +23,7 @@ class MarketDataTool(BaseTool):
             "codes": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": 'Symbols such as ["AAPL.US"], ["700.HK"], ["BTC-USDT"].',
+                "description": 'Symbols such as ["000001.SZ"], ["600519.SH"].',
             },
             "start_date": {
                 "type": "string",
@@ -35,32 +35,7 @@ class MarketDataTool(BaseTool):
             },
             "source": {
                 "type": "string",
-                "enum": [
-                    "auto",
-                    "yfinance",
-                    "yahoo",
-                    "okx",
-                    "ccxt",
-                    "tushare",
-                    "baostock",
-                    "tencent",
-                    "akshare",
-                    "mootdx",
-                    "eastmoney",
-                    "sina",
-                    "stooq",
-                    "finnhub",
-                    "alphavantage",
-                    "tiingo",
-                    "fmp",
-                ],
-                "description": (
-                    "Data source. 'auto' detects from symbol format with fallback. "
-                    "Free, no key: yfinance/yahoo (US/HK equities), okx/ccxt "
-                    "(crypto), baostock/tencent/eastmoney/sina/akshare/mootdx "
-                    "(China A-shares), stooq (global EOD). Key-gated REST: tushare "
-                    "(China A-shares), finnhub/alphavantage/tiingo/fmp (US/global)."
-                ),
+                "description": "Data source: auto, tushare, akshare, mootdx, baostock, or tencent.",
                 "default": "auto",
             },
             "interval": {
