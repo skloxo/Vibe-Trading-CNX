@@ -1,13 +1,11 @@
-"""L6 — real Robinhood catalog + quantity→quote pricing (SPEC.md §4, §7.5).
+"""L6 — quantity->quote pricing (SPEC.md S4, S7.5).
 
-Covers:
+Covers quantity-only quote derivation: broker ``get_quotes`` preferred,
+data-loader fallback, fail-closed DENY when no quote is obtainable.
+Never hits the network (the loader path is stubbed).
 
-* The frozen canonical Robinhood read/write catalog.
-* The extractor's finalized ``place_order`` field mapping (symbol/side/size,
-  unknown keys ignored, ambiguity → ``None``).
-* Quantity-only quote derivation: broker ``get_quotes`` preferred, data-loader
-  fallback, fail-closed DENY when no quote is obtainable. Never hits the network
-  (the loader path is stubbed).
+Robinhood catalog and extractor tests removed during foreign-market cleanup
+(connector modules deleted).
 """
 
 from __future__ import annotations
@@ -22,90 +20,12 @@ import pytest
 import src.live.enforcement as enforcement
 import src.live.order_guard as order_guard
 import src.live.paths as paths
-from src.live.classification import ToolClass
-from src.trading.connectors.robinhood.extractor import extract_order_intent
 from src.live.mandate.model import (
     MANDATE_SCHEMA_VERSION,
     AssetClass,
     InstrumentType,
 )
-from src.trading.connectors.robinhood.classification import ROBINHOOD_TOOL_CLASS
 from src.tools.mcp import MCPRemoteToolSpec
-
-
-# --------------------------------------------------------------------------- #
-# C1 / L6 — frozen canonical catalog                                          #
-# --------------------------------------------------------------------------- #
-
-_CANONICAL_READ = {"get_account", "get_positions", "get_quotes", "list_orders"}
-_CANONICAL_WRITE = {"place_order", "cancel_order"}
-
-
-def test_catalog_is_exactly_the_canonical_set() -> None:
-    reads = {n for n, c in ROBINHOOD_TOOL_CLASS.items() if c is ToolClass.READ}
-    writes = {n for n, c in ROBINHOOD_TOOL_CLASS.items() if c is ToolClass.WRITE}
-    assert reads == _CANONICAL_READ
-    assert writes == _CANONICAL_WRITE
-    # No stale names beyond the frozen catalog.
-    assert set(ROBINHOOD_TOOL_CLASS) == _CANONICAL_READ | _CANONICAL_WRITE
-
-
-# --------------------------------------------------------------------------- #
-# L6 — extractor field mapping finalized + defensive                          #
-# --------------------------------------------------------------------------- #
-
-
-def test_extractor_maps_notional_order() -> None:
-    intent = extract_order_intent(
-        "place_order",
-        {"symbol": "aapl", "side": "buy", "instrument_type": "stock", "notional_usd": 250.0},
-    )
-    assert intent is not None
-    assert intent.symbol == "AAPL"
-    assert intent.side == "buy"
-    assert intent.notional_usd == 250.0
-    assert intent.quantity is None
-    assert intent.instrument_type is InstrumentType.EQUITY
-
-
-def test_extractor_maps_quantity_and_dollar_amount_alias() -> None:
-    intent = extract_order_intent(
-        "place_order",
-        {"ticker": "NVDA", "action": "sell", "type": "equity", "quantity": 3, "dollar_amount": 600},
-    )
-    assert intent is not None
-    assert intent.symbol == "NVDA"
-    assert intent.side == "sell"
-    assert intent.quantity == 3.0
-    # dollar_amount is accepted as a notional alias.
-    assert intent.notional_usd == 600.0
-
-
-def test_extractor_ignores_unknown_extra_keys() -> None:
-    intent = extract_order_intent(
-        "place_order",
-        {
-            "symbol": "MSFT", "side": "buy", "instrument_type": "equity",
-            "quantity": 1, "time_in_force": "gtc", "client_tag": "x", "extended_hours": True,
-        },
-    )
-    assert intent is not None
-    assert intent.symbol == "MSFT"
-    assert intent.quantity == 1.0
-
-
-def test_extractor_rejects_non_order_tool() -> None:
-    assert extract_order_intent("cancel_order", {"order_id": "x"}) is None
-    assert extract_order_intent("get_quotes", {"symbol": "AAPL"}) is None
-
-
-def test_extractor_rejects_missing_or_ambiguous_fields() -> None:
-    # Missing side.
-    assert extract_order_intent("place_order", {"symbol": "AAPL", "instrument_type": "equity", "notional_usd": 10}) is None
-    # Unknown instrument.
-    assert extract_order_intent("place_order", {"symbol": "AAPL", "side": "buy", "instrument_type": "warrant", "notional_usd": 10}) is None
-    # No size at all.
-    assert extract_order_intent("place_order", {"symbol": "AAPL", "side": "buy", "instrument_type": "equity"}) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -182,7 +102,7 @@ class _BrokerQuoteAdapter:
 
 
 class _NoBrokerQuoteAdapter:
-    """Adapter whose ``get_quotes`` errors — forces the data-loader fallback."""
+    """Adapter whose ``get_quotes`` errors -- forces the data-loader fallback."""
 
     def __init__(self) -> None:
         self.server_name = "robinhood"
@@ -230,7 +150,7 @@ def test_quantity_only_in_mandate_forwards(live_runtime: Path) -> None:
 
 def test_quantity_falls_back_to_data_loader(live_runtime: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """When the broker quote tool errors, the gate derives price from the data
-    loaders (stubbed — no network)."""
+    loaders (stubbed -- no network)."""
     _write_mandate(live_runtime, max_order_notional_usd=750.0)
     monkeypatch.setattr(order_guard, "last_price_usd", lambda sym, ac: 100.0)
     adapter = _NoBrokerQuoteAdapter()
@@ -244,7 +164,7 @@ def test_quantity_falls_back_to_data_loader(live_runtime: Path, monkeypatch: pyt
 
 
 def test_quantity_no_quote_anywhere_denies_fail_closed(live_runtime: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Quantity order + broker quote errors + loader returns nothing → DENY,
+    """Quantity order + broker quote errors + loader returns nothing -> DENY,
     never waved through."""
     _write_mandate(live_runtime)
     monkeypatch.setattr(order_guard, "last_price_usd", lambda sym, ac: None)
@@ -261,7 +181,7 @@ def test_quantity_no_quote_anywhere_denies_fail_closed(live_runtime: Path, monke
 
 def test_last_price_usd_fail_closed_on_loader_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     """The loader-backed price helper denies (returns None) when no loader is
-    available — never a network call in tests."""
+    available -- never a network call in tests."""
     def _raise(_ac):
         raise enforcement.UniverseDataUnavailable("no loader")
 

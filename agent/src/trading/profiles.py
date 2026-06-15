@@ -6,21 +6,14 @@ import json
 from pathlib import Path
 
 from src.config.paths import get_runtime_root
-from src.trading.connectors.futu.profiles import FUTU_PROFILES
-from src.trading.connectors.ibkr.profiles import IBKR_PROFILES
-from src.trading.connectors.longbridge.profiles import LONGBRIDGE_PROFILES
-from src.trading.connectors.tiger.profiles import TIGER_PROFILES
 from src.trading.types import TradingProfile
 
 CONFIG_FILENAME = "trading-connections.json"
-DEFAULT_PROFILE_ID = "ibkr-paper-local"
+DEFAULT_PROFILE_ID = ""
 
-BUILTIN_PROFILES: tuple[TradingProfile, ...] = (
-    *IBKR_PROFILES,
-    *TIGER_PROFILES,
-    *LONGBRIDGE_PROFILES,
-    *FUTU_PROFILES,
-)
+# All built-in connector profiles removed during foreign-market cleanup.
+# Remote MCP connectors (e.g. Robinhood) are configured via agent.json.
+BUILTIN_PROFILES: tuple[TradingProfile, ...] = ()
 
 
 def config_path() -> Path:

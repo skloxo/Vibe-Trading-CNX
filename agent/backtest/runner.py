@@ -298,8 +298,8 @@ def _validate_signal_engine_class(engine_cls) -> None:
 # Back-compat: market type -> legacy source name (for engine selection & metrics)
 _MARKET_TO_SOURCE = {
     "a_share": "tushare",
-    "us_equity": "yfinance",
-    "hk_equity": "yfinance",
+    "us_equity": "akshare",
+    "hk_equity": "akshare",
     "crypto": "okx",
     "futures": "tushare",
     "fund": "tushare",
@@ -315,7 +315,7 @@ def _detect_source(code: str) -> str:
         code: Ticker / symbol string.
 
     Returns:
-        Source name (tushare/okx/yfinance/akshare).
+        Source name (tushare/okx/akshare).
     """
     market = _detect_market(code)
     return _MARKET_TO_SOURCE.get(market, "tushare")
@@ -357,7 +357,7 @@ def _get_loader(source: str):
     """Return a DataLoader class for a source name, with fallback.
 
     Args:
-        source: Source name (tushare/okx/yfinance/akshare/ccxt).
+        source: Source name (tushare/okx/akshare).
 
     Returns:
         DataLoader class.
@@ -381,7 +381,7 @@ def _normalize_codes(codes: List[str], source: str) -> List[str]:
     Returns:
         Normalized codes.
     """
-    if source in ("okx", "ccxt"):
+    if source == "okx":
         return [c.replace("/", "-").upper() for c in codes]
     return codes
 
@@ -541,7 +541,7 @@ def _create_market_engine(source: str, config: dict, codes: List[str]):
       2. Fall back to source-based routing (okx->crypto, tushare->china_a, etc.)
 
     Args:
-        source: Data source (okx/ccxt/tushare/akshare/yfinance).
+        source: Data source (okx/tushare/akshare).
         config: Backtest configuration.
         codes: Instrument codes.
 
@@ -571,7 +571,7 @@ def _create_market_engine(source: str, config: dict, codes: List[str]):
         return ForexEngine(config)
 
     # Original routing (Wave 1)
-    if source in ("okx", "ccxt"):
+    if source == "okx":
         from backtest.engines.crypto import CryptoEngine
         return CryptoEngine(config)
     elif source in ("tushare", "akshare"):
@@ -581,10 +581,6 @@ def _create_market_engine(source: str, config: dict, codes: List[str]):
             return GlobalEquityEngine(config, market=market)
         from backtest.engines.china_a import ChinaAEngine
         return ChinaAEngine(config)
-    elif source == "yfinance":
-        from backtest.engines.global_equity import GlobalEquityEngine
-        market = _detect_submarket(codes)
-        return GlobalEquityEngine(config, market=market)
     else:
         from backtest.engines.crypto import CryptoEngine
         return CryptoEngine(config)

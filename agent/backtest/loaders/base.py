@@ -101,7 +101,7 @@ def validate_ohlc(frame: pd.DataFrame, *, strategy: str = "drop") -> pd.DataFram
 
 
 # ---------------------------------------------------------------------------
-# Bounded retry / budget helpers (shared by ccxt_loader, okx, and any future
+# Bounded retry / budget helpers (shared by okx and any future
 # loader calling a flaky external API).
 # ---------------------------------------------------------------------------
 
@@ -150,7 +150,7 @@ def check_budget(deadline: float, label: str, budget_s: float | None = None) -> 
     Args:
         deadline: ``time.monotonic()`` instant past which we abort.
         label: Free-form label used in the exception message
-            (e.g. ``"ccxt fetch for BTC/USDT"``).
+            (e.g. ``"okx fetch for BTC/USDT"``).
         budget_s: Original budget in seconds, included verbatim in the
             message when present.
     """
@@ -537,7 +537,7 @@ def _frame_for_loader_cache(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str
         "version": _LOADER_CACHE_VERSION,
         "index_columns": index_columns,
         "index_names": original_index_names,
-        # Preserve the columns-axis name (e.g. yfinance leaves "Price") and the
+        # Preserve the columns-axis name and the
         # per-level index dtypes so a cached frame round-trips byte-identical to
         # a freshly fetched one (duckdb parquet otherwise rewrites datetime
         # resolution, e.g. [s] -> [us]).
