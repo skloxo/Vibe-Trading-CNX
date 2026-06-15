@@ -16,12 +16,7 @@ RUNNER_CAPABILITY = "runner.manage.requires_mandate"
 _SDK_CONNECTOR_MODULES = {
     "tiger": "src.trading.connectors.tiger.sdk",
     "longbridge": "src.trading.connectors.longbridge.sdk",
-    "alpaca": "src.trading.connectors.alpaca.sdk",
-    "okx": "src.trading.connectors.okx.sdk",
-    "binance": "src.trading.connectors.binance.sdk",
     "futu": "src.trading.connectors.futu.sdk",
-    "dhan": "src.trading.connectors.dhan.sdk",
-    "shoonya": "src.trading.connectors.shoonya.sdk",
 }
 
 
@@ -198,9 +193,6 @@ def get_history(
 #: Connector → (instrument type, fixed asset class | None). ``None`` asset class
 #: means "infer from the symbol's market" (multi-market equity connectors).
 _CONNECTOR_INSTRUMENT = {
-    "okx": ("crypto", "crypto"),
-    "binance": ("crypto", "crypto"),
-    "alpaca": ("equity", "us_equity"),
     "tiger": ("equity", None),
     "longbridge": ("equity", None),
     "futu": ("equity", None),
@@ -394,10 +386,6 @@ def connector_profile_id_for_broker(broker: str) -> str:
 
 def runner_tool_name(connector: str, operation: str) -> str | None:
     """Map a runner operation to a connector-specific remote MCP tool name."""
-    if connector == "robinhood":
-        from src.trading.connectors.robinhood.mcp import runner_tool_name as _runner_tool_name
-
-        return _runner_tool_name(operation)
     return None
 
 
@@ -520,19 +508,11 @@ def _call_remote(profile: TradingProfile, operation: str, arguments: dict[str, A
 
 def _remote_tool_name(connector: str, operation: str) -> str | None:
     """Map generic read operations to current remote MCP tool names."""
-    if connector == "robinhood":
-        from src.trading.connectors.robinhood.mcp import remote_tool_name
-
-        return remote_tool_name(operation)
     return None
 
 
 def _remote_arguments(connector: str, operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Normalize generic arguments for a remote MCP operation."""
-    if connector == "robinhood":
-        from src.trading.connectors.robinhood.mcp import remote_arguments
-
-        return remote_arguments(operation, arguments)
     return {}
 
 

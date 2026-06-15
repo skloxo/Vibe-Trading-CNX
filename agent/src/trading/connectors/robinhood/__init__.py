@@ -1,2 +1,0 @@
-"""Robinhood connector package."""
-

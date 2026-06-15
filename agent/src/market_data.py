@@ -15,15 +15,15 @@ DEFAULT_MAX_ROWS = 250
 
 _SOURCE_PATTERNS = [
     (re.compile(r"^\d{6}\.(SZ|SH|BJ)$", re.I), "baostock"),
-    (re.compile(r"^[A-Z]+\.US$", re.I), "yfinance"),
-    (re.compile(r"^\d{3,5}\.HK$", re.I), "yfinance"),
-    (re.compile(r"^[A-Z]+-USDT$", re.I), "okx"),
-    (re.compile(r"^[A-Z]+/USDT$", re.I), "ccxt"),
 ]
 
 
 def detect_source(code: str) -> str:
-    """Infer the best loader source for a normalized symbol."""
+    """Infer the best loader source for a normalized symbol.
+
+    Only A-share patterns are recognized (SZ/SH/BJ suffix).
+    All other codes default to ``tushare``.
+    """
     for pattern, source in _SOURCE_PATTERNS:
         if pattern.match(code):
             return source

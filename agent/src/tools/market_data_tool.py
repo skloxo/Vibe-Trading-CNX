@@ -14,8 +14,8 @@ class MarketDataTool(BaseTool):
     name = "get_market_data"
     description = (
         "Fetch normalized OHLCV market data through the repository loader layer. "
-        "Use this for stock, ETF, index, or crypto price bars before writing raw "
-        "yfinance/OKX/Tushare scripts."
+        "Use this for stock, ETF, or index price bars before writing raw "
+        "data source scripts."
     )
     parameters = {
         "type": "object",
@@ -23,7 +23,7 @@ class MarketDataTool(BaseTool):
             "codes": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": 'Symbols such as ["AAPL.US"], ["700.HK"], ["BTC-USDT"].',
+                "description": 'Symbols such as ["000001.SZ"], ["600519.SH"].',
             },
             "start_date": {
                 "type": "string",
@@ -35,7 +35,7 @@ class MarketDataTool(BaseTool):
             },
             "source": {
                 "type": "string",
-                "description": "Data source: auto, yfinance, okx, tushare, baostock, tencent, akshare, or ccxt.",
+                "description": "Data source: auto, tushare, akshare, mootdx, baostock, or tencent.",
                 "default": "auto",
             },
             "interval": {

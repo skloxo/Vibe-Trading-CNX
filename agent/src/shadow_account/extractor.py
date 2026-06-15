@@ -302,9 +302,6 @@ def _heuristic_single_rule(
 
 _MARKET_LABELS = {
     "china_a": "China A-share",
-    "us": "US equity",
-    "hk": "HK equity",
-    "crypto": "Crypto",
     "other": "Other",
 }
 
