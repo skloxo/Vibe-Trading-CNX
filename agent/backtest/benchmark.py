@@ -11,8 +11,6 @@ from typing import Optional
 
 import pandas as pd
 
-from backtest.loaders.yfinance_loader import DataLoader as YfinanceLoader
-
 
 # -------------------------------------------------------------------
 # Benchmark map: market type → default ticker
@@ -47,7 +45,7 @@ def resolve_benchmark(
 
     Args:
         strategy_codes: Instruments being backtested (used for market inference).
-        source:         Data source name (tushare / yfinance / okx / akshare / ccxt).
+        source:         Data source name (tushare / okx / akshare).
         start_date:     Backtest start date.
         end_date:       Backtest end date.
         interval:       Bar interval (1m / 5m / 15m / 30m / 1H / 4H / 1D).
@@ -113,7 +111,7 @@ def _infer_market(codes: list[str], source: str) -> str:
 
     first = codes[0].upper()
 
-    if source in ("okx", "ccxt") or "-" in first or "/" in first:
+    if source == "okx" or "-" in first or "/" in first:
         return "crypto"
     if first.endswith(".US"):
         return "us_equity"
@@ -135,8 +133,10 @@ def _fetch_benchmark(
     end_date:   str,
     interval:   str,
 ) -> pd.DataFrame:
-    """Fetch benchmark OHLCV data via yfinance (single symbol, no auth)."""
-    loader = YfinanceLoader()
+    """Fetch benchmark OHLCV data via the loader registry (auto-fallback)."""
+    from backtest.loaders.registry import resolve_loader
+
+    loader = resolve_loader("a_share")
     result = loader.fetch([ticker], start_date, end_date, interval=interval)
 
     if isinstance(result, dict):

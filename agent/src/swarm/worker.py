@@ -224,7 +224,7 @@ def build_worker_prompt(
             "or return calculations, call `get_market_data` before writing raw "
             "provider scripts. It uses the repository loader layer, normalizes "
             "symbols, drops malformed OHLC rows, and returns strict JSON. Use "
-            "raw yfinance scripts only for fields outside OHLCV coverage, such "
+            "raw data scripts only for fields outside OHLCV coverage, such "
             "as fundamentals, holders, options, or corporate metadata."
         )
 
@@ -266,7 +266,7 @@ def build_worker_prompt(
         "- `load_skill` first to get data access methods and analysis patterns.\n"
         "- Write ONE focused Python script via `write_file`, then run it with `bash python script.py`.\n"
         "- Do NOT write long Python code inside bash. Use write_file + bash.\n"
-        "- Do NOT fetch data with curl/requests. Use the patterns from load_skill (yfinance, OKX API via Python).\n"
+        "- Do NOT fetch data with curl/requests. Use the patterns from load_skill (OKX API via Python).\n"
         "- If a script fails, read the error, fix with `edit_file`, re-run. Max 2 retries per script.\n\n"
         "**Phase 3 — Summarize (MUST use write_file):**\n"
         "- You MUST call `write_file` with path `report.md` to save your final report as a markdown file.\n"

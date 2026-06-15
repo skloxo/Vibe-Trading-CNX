@@ -30,7 +30,16 @@ from mcp import types as mcp_types
 from src.live.classification import ToolClass, classify_tool
 from src.live.order_guard import LiveOrderGuardTool
 from src.live.registry import wrap_live_broker_tools
-from src.trading.connectors.robinhood.classification import ROBINHOOD_TOOL_CLASS
+# Inline curated map (connector module removed during foreign-market cleanup).
+from src.live.classification import ToolClass
+ROBINHOOD_TOOL_CLASS: dict[str, ToolClass] = {
+    "get_account": ToolClass.READ,
+    "get_positions": ToolClass.READ,
+    "get_quotes": ToolClass.READ,
+    "list_orders": ToolClass.READ,
+    "place_order": ToolClass.WRITE,
+    "cancel_order": ToolClass.WRITE,
+}
 from src.tools.mcp import MCPRemoteTool, build_mcp_tool_wrappers
 
 pytestmark = pytest.mark.unit
