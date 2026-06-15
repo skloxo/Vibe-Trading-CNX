@@ -16,24 +16,24 @@ interface Category {
 
 const CATEGORIES: Category[] = [
   {
-    label: "Multi-Market Backtest",
+    label: "A-Share Backtest",
     icon: <TrendingUp className="h-4 w-4" />,
     color: "text-red-400 border-red-500/30 hover:border-red-500/60 hover:bg-red-500/5",
     examples: [
       {
-        title: "Cross-Market Portfolio",
-        desc: "A-shares + crypto + US equities with risk-parity optimizer",
-        prompt: "Backtest a risk-parity portfolio of 000001.SZ, BTC-USDT, and AAPL for full-year 2024, compare against equal-weight baseline",
+        title: "A-Share Portfolio Optimization",
+        desc: "沪深300成分股风险平价优化器",
+        prompt: "用000001.SZ、600519.SH、000858.SZ构建风险平价组合，回测2024全年，与等权基准对比",
       },
       {
-        title: "BTC 5-Min MACD Strategy",
-        desc: "Minute-level crypto backtest with real-time OKX data",
-        prompt: "Backtest BTC-USDT 5-minute MACD strategy, fast=12 slow=26 signal=9, last 30 days",
+        title: "A-Share MACD Strategy",
+        desc: "基于分钟级数据的A股MACD策略回测",
+        prompt: "用000001.SZ的5分钟K线做MACD策略回测，快线12慢线26信号线9，近30天",
       },
       {
-        title: "US Tech Max Diversification",
-        desc: "Portfolio optimizer across FAANG+ via yfinance",
-        prompt: "Backtest AAPL, MSFT, GOOGL, AMZN, NVDA with max_diversification portfolio optimizer, full-year 2024",
+        title: "Blue-Chip Max Diversification",
+        desc: "蓝筹股最大分散化投资组合优化器",
+        prompt: "回测600519.SH、000858.SZ、601318.SH、000001.SZ、600036.SH的最大分散化投资组合，2024全年",
       },
     ],
   },
@@ -62,7 +62,7 @@ const CATEGORIES: Category[] = [
       {
         title: "Investment Committee Review",
         desc: "Multi-agent debate: long vs short, risk review, PM decision",
-        prompt: "[Swarm Team Mode] Use the investment_committee preset to evaluate whether to go long or short on NVDA given current market conditions",
+        prompt: "[Swarm Team Mode] Use the investment_committee preset to evaluate whether to go long or short on 600519.SH given current market conditions",
       },
       {
         title: "Quant Strategy Desk",
@@ -83,8 +83,8 @@ const CATEGORIES: Category[] = [
       },
       {
         title: "Web Research: Macro Outlook",
-        desc: "Read live web sources for macro analysis",
-        prompt: "Read the latest Fed meeting minutes and summarize the key takeaways for equity and crypto markets",
+        desc: "宏观分析与A股市场展望",
+        prompt: "阅读最新的央行货币政策报告，总结对A股市场的影响",
       },
     ],
   },
@@ -123,7 +123,7 @@ const CATEGORIES: Category[] = [
       {
         title: "Quote & Trend",
         desc: "Fetch a quote plus recent daily bars through the selected connector",
-        prompt: "Use the selected trading connector to fetch an AAPL quote and 30 daily bars, then summarize the current quote versus the recent trend. Keep it read-only.",
+        prompt: "Use the selected trading connector to fetch a 600519.SH quote and 30 daily bars, then summarize the current quote versus the recent trend. Keep it read-only.",
       },
     ],
   },
@@ -140,7 +140,7 @@ const CATEGORIES: Category[] = [
       {
         title: "How Much Am I Leaving on the Table?",
         desc: "Backtest your shadow strategy and attribute delta vs. your actual PnL",
-        prompt: "Run a shadow backtest for the last 90 days on the US market and break down where my PnL diverged from the shadow (rule violations, early exits, missed signals)",
+        prompt: "Run a shadow backtest for the last 90 days and break down where my PnL diverged from the shadow (rule violations, early exits, missed signals)",
       },
       {
         title: "Generate Shadow Report",
@@ -155,7 +155,7 @@ const CAPABILITY_CHIPS = [
   "Finance Skills Library",
   "Swarm Agent Teams",
   "Auto-Discovered Tools",
-  "3 Markets: A-Share · Crypto · HK/US",
+  "A-Share · Multi-Factor · Quantitative",
   "Trading Connector Profiles",
   "Minute to Daily Timeframes",
   "4 Portfolio Optimizers",

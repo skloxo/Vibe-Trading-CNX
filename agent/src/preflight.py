@@ -154,35 +154,6 @@ def _check_okx() -> CheckResult:
         )
 
 
-def _check_yfinance() -> CheckResult:
-    """Check yfinance availability."""
-    try:
-        import yfinance  # noqa: F401
-    except ImportError:
-        return CheckResult(
-            name="yfinance",
-            status="skipped",
-            message="package not installed",
-            impact="US/HK equity backtest unavailable",
-        )
-
-    try:
-        import yfinance as yf
-
-        ticker = yf.Ticker("AAPL")
-        info = ticker.fast_info
-        if hasattr(info, "last_price") and info.last_price:
-            return CheckResult(name="yfinance", status="ready", message="reachable", impact="")
-        return CheckResult(name="yfinance", status="ready", message="reachable (no price data)", impact="")
-    except Exception as exc:
-        return CheckResult(
-            name="yfinance",
-            status="error",
-            message=f"{type(exc).__name__}: {exc}",
-            impact="US/HK equity backtest unavailable",
-        )
-
-
 def _check_tushare() -> CheckResult:
     """Check Tushare token configuration."""
     token = os.getenv("TUSHARE_TOKEN", "").strip()
@@ -219,18 +190,7 @@ def _check_akshare() -> CheckResult:
     return CheckResult(name="akshare", status="ready", message="installed", impact="")
 
 
-def _check_ccxt() -> CheckResult:
-    """Check ccxt availability."""
-    try:
-        import ccxt  # noqa: F401
-    except ImportError:
-        return CheckResult(
-            name="ccxt",
-            status="skipped",
-            message="package not installed",
-            impact="crypto fallback unavailable",
-        )
-    return CheckResult(name="ccxt", status="ready", message="installed", impact="")
+# _check_yfinance and _check_ccxt removed during foreign-market cleanup.
 
 
 # -- Status icons and colors --------------------------------------------------
@@ -258,10 +218,8 @@ def run_preflight(console: Optional[Console] = None) -> List[CheckResult]:
     checks = [
         _check_llm_provider,
         _check_okx,
-        _check_yfinance,
         _check_tushare,
         _check_akshare,
-        _check_ccxt,
     ]
 
     results: List[CheckResult] = []

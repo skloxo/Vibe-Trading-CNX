@@ -3366,42 +3366,9 @@ def cmd_connector_configure(
     yes: bool = False,
 ) -> int:
     """Configure a local connector profile."""
-    from src.trading.connectors.ibkr.local import IBKRLocalConfig, config_path, save_config
-
-    try:
-        profile = _selected_profile_or(profile_id)
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return EXIT_USAGE_ERROR
-    if profile.transport != "local_tws" or profile.connector != "ibkr":
-        console.print(f"[red]{profile.id} is not a local TWS/Gateway profile.[/red]")
-        return EXIT_USAGE_ERROR
-
-    path = config_path()
-    if path.exists() and not yes:
-        console.print(f"[yellow]Local connector config already exists:[/yellow] {path}")
-        try:
-            if not Confirm.ask("Overwrite it?", default=False):
-                console.print("[dim]Aborted.[/dim]")
-                return EXIT_SUCCESS
-        except EOFError:
-            console.print("[dim]No input available; use --yes for non-interactive setup.[/dim]")
-            return EXIT_USAGE_ERROR
-
-    cfg = IBKRLocalConfig.from_mapping(
-        {
-            **profile.config,
-            "host": host,
-            "port": port or profile.config.get("port"),
-            "clientId": client_id,
-            "account": account,
-            "readonly": True,
-        }
-    )
-    path = save_config(cfg)
-    console.print(f"[green]Configured[/green] {profile.id} [dim]({path})[/dim]")
-    console.print(f"[dim]Run `vibe-trading connector check {profile.id}` to verify it.[/dim]")
-    return EXIT_SUCCESS
+    console.print("[red]Local connector configuration is no longer available.[/red]")
+    console.print("[dim]All direct-SDK connectors have been removed. Use remote MCP connectors instead.[/dim]")
+    return EXIT_USAGE_ERROR
 
 
 def cmd_connector_check(

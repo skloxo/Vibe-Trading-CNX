@@ -422,30 +422,6 @@ class TestDateRangeValidation:
         with pytest.raises(ValueError, match="Invalid date format"):
             validate_date_range("not-a-date", "2025-06-01")
 
-    def test_yfinance_loader_validates_dates(self) -> None:
-        """yfinance loader should raise on reversed dates before fetching."""
-        from backtest.loaders.yfinance_loader import DataLoader
-
-        loader = DataLoader()
-        with pytest.raises(ValueError):
-            loader.fetch(["AAPL"], "2025-06-01", "2025-01-01")
-
-    def test_okx_loader_validates_dates(self) -> None:
-        """OKX loader should raise on reversed dates before fetching."""
-        from backtest.loaders.okx import DataLoader
-
-        loader = DataLoader()
-        with pytest.raises(ValueError):
-            loader.fetch(["BTC-USDT"], "2025-06-01", "2025-01-01")
-
-    def test_ccxt_loader_validates_dates(self) -> None:
-        """CCXT loader should raise on reversed dates before fetching."""
-        from backtest.loaders.ccxt_loader import DataLoader
-
-        loader = DataLoader()
-        with pytest.raises(ValueError):
-            loader.fetch(["BTC-USDT"], "2025-06-01", "2025-01-01")
-
     def test_akshare_loader_validates_dates(self) -> None:
         """AKShare loader should raise on reversed dates before fetching."""
         from backtest.loaders.akshare_loader import DataLoader

@@ -9,76 +9,22 @@ from src.trading.types import TradingProfile
 
 RUNNER_CAPABILITY = "runner.manage.requires_mandate"
 
-#: Direct-SDK connectors (``broker_sdk`` transport) → their connector module.
-#: Each module exposes a uniform read interface (``build_config``, ``check_status``,
-#: ``get_account_snapshot``, ``get_positions``, ``get_open_orders``, ``get_quote``,
-#: ``get_historical_bars``).
-_SDK_CONNECTOR_MODULES = {
-    "tiger": "src.trading.connectors.tiger.sdk",
-    "longbridge": "src.trading.connectors.longbridge.sdk",
-    "futu": "src.trading.connectors.futu.sdk",
-}
-
-
-def _sdk_module(connector: str):
-    """Import the SDK connector module for a ``broker_sdk`` connector key."""
-    import importlib
-
-    path = _SDK_CONNECTOR_MODULES.get(connector)
-    if path is None:
-        raise ValueError(f"no SDK connector module for '{connector}'")
-    return importlib.import_module(path)
-
 
 def check_connection(profile_id: str | None = None, **overrides: Any) -> dict[str, Any]:
     """Check a connector profile without mutating broker state."""
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import check_local_status
-
-        cfg = _ibkr_config(profile, overrides)
-        report = check_local_status(cfg)
-        report["profile_id"] = profile.id
-        report["connector"] = profile.connector
-        report["environment"] = profile.environment
-        report["transport"] = profile.transport
-        return report
-
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        report = module.check_status(module.build_config(profile.config, overrides))
-        report["profile_id"] = profile.id
-        report["connector"] = profile.connector
-        report["environment"] = profile.environment
-        report["transport"] = profile.transport
-        return report
-
     return _remote_status(profile)
 
 
 def get_account(profile_id: str | None = None, **overrides: Any) -> dict[str, Any]:
     """Read account summary for a connector profile."""
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import get_account_snapshot
-
-        return _with_profile(profile, get_account_snapshot(_ibkr_config(profile, overrides)))
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        return _with_profile(profile, module.get_account_snapshot(module.build_config(profile.config, overrides)))
     return _call_remote(profile, "account", {})
 
 
 def get_positions(profile_id: str | None = None, **overrides: Any) -> dict[str, Any]:
     """Read positions for a connector profile."""
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import get_positions as _get_positions
-
-        return _with_profile(profile, _get_positions(_ibkr_config(profile, overrides)))
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        return _with_profile(profile, module.get_positions(module.build_config(profile.config, overrides)))
     return _call_remote(profile, "positions", {})
 
 
@@ -90,19 +36,6 @@ def get_open_orders(
 ) -> dict[str, Any]:
     """Read open orders for a connector profile."""
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import get_open_orders as _get_open_orders
-
-        return _with_profile(
-            profile,
-            _get_open_orders(_ibkr_config(profile, overrides), include_executions=include_executions),
-        )
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        return _with_profile(
-            profile,
-            module.get_open_orders(module.build_config(profile.config, overrides), include_executions=include_executions),
-        )
     return _call_remote(profile, "orders", {})
 
 
@@ -117,22 +50,6 @@ def get_quote(
 ) -> dict[str, Any]:
     """Read a quote for a connector profile."""
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import get_quote as _get_quote
-
-        return _with_profile(
-            profile,
-            _get_quote(
-                symbol,
-                config=_ibkr_config(profile, overrides),
-                exchange=exchange,
-                currency=currency,
-                sec_type=sec_type,
-            ),
-        )
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        return _with_profile(profile, module.get_quote(symbol, config=module.build_config(profile.config, overrides)))
     return _call_remote(profile, "quote", {"symbols": [symbol], "symbol": symbol})
 
 
@@ -159,71 +76,7 @@ def get_history(
     understands and maps to its own SDK tokens.
     """
     profile = profile_by_id(profile_id)
-    if profile.transport == "local_tws":
-        from src.trading.connectors.ibkr.local import get_historical_bars
-
-        return _with_profile(
-            profile,
-            get_historical_bars(
-                symbol,
-                config=_ibkr_config(profile, overrides),
-                exchange=exchange,
-                currency=currency,
-                sec_type=sec_type,
-                duration=duration,
-                bar_size=bar_size,
-                what_to_show=what_to_show,
-                use_rth=use_rth,
-            ),
-        )
-    if profile.transport == "broker_sdk":
-        module = _sdk_module(profile.connector)
-        return _with_profile(
-            profile,
-            module.get_historical_bars(
-                symbol,
-                config=module.build_config(profile.config, overrides),
-                period=period,
-                limit=limit,
-            ),
-        )
     return _unsupported(profile, "history.read")
-
-
-#: Connector → (instrument type, fixed asset class | None). ``None`` asset class
-#: means "infer from the symbol's market" (multi-market equity connectors).
-_CONNECTOR_INSTRUMENT = {
-    "tiger": ("equity", None),
-    "longbridge": ("equity", None),
-    "futu": ("equity", None),
-}
-
-
-def _order_classification(connector: str, symbol: str):
-    """Return ``(InstrumentType, AssetClass | None)`` for an order's mandate gate.
-
-    Crypto connectors are unambiguous; multi-market equity connectors infer the
-    asset class from the symbol's market tag (``.HK``/``HK.`` → HK, ``.US``/``US.``
-    → US, ``.SH``/``.SZ``/``CN.`` → A-share). When the market cannot be inferred
-    the asset class is ``None`` and the gate falls back to the US default — which
-    only ever DENIES (never silently widens) when the user's mandate permits a
-    non-US class, so the unknown case is fail-safe.
-    """
-    from src.live.mandate.model import AssetClass, InstrumentType
-
-    instrument_name, asset_name = _CONNECTOR_INSTRUMENT.get(connector, ("equity", None))
-    instrument = InstrumentType(instrument_name)
-    if asset_name is not None:
-        return instrument, AssetClass(asset_name)
-
-    token = (symbol or "").strip().upper()
-    if token.startswith("HK.") or token.endswith(".HK"):
-        return instrument, AssetClass.HK_EQUITY
-    if token.startswith("US.") or token.endswith(".US"):
-        return instrument, AssetClass.US_EQUITY
-    if token.startswith(("CN.", "SH.", "SZ.")) or token.endswith((".SH", ".SS", ".SZ")):
-        return instrument, AssetClass.CN_EQUITY
-    return instrument, None
 
 
 def place_order(
@@ -241,53 +94,12 @@ def place_order(
 ) -> dict[str, Any]:
     """Place an order via a connector profile.
 
-    Paper profiles place directly against the broker's sandbox account. Live
-    profiles route through the direct-SDK mandate gate (mandate + kill switch +
-    fail-closed pre-trade checks + audit) before any order reaches the broker.
-    Only ``broker_sdk`` connectors are supported here; Robinhood keeps its MCP
-    gate and IBKR stays read-only.
+    Direct-SDK connectors have been removed. Only remote MCP connectors are
+    supported; order placement through the generic trading tool is not yet
+    implemented for remote MCP profiles.
     """
     profile = profile_by_id(profile_id)
-    if profile.transport != "broker_sdk":
-        return _unsupported(profile, "orders.place")
-
-    module = _sdk_module(profile.connector)
-    config = module.build_config(profile.config, overrides)
-    place_kwargs = {
-        "symbol": symbol,
-        "side": side,
-        "quantity": quantity,
-        "notional": notional,
-        "order_type": order_type,
-        "limit_price": limit_price,
-        "time_in_force": time_in_force,
-    }
-
-    if profile.environment == "paper":
-        return _with_profile(profile, module.place_order(config, **place_kwargs))
-
-    # Live: pre-trade mandate gate.
-    from src.live.enforcement import OrderIntent
-    from src.live.sdk_order_gate import execute_live_order
-
-    instrument_type, asset_class = _order_classification(profile.connector, symbol)
-    intent = OrderIntent(
-        symbol=str(symbol or "").strip().upper(),
-        side=str(side or "").strip().lower(),
-        notional_usd=float(notional) if notional is not None else None,
-        quantity=float(quantity) if quantity is not None else None,
-        instrument_type=instrument_type,
-        asset_class=asset_class,
-    )
-    result = execute_live_order(
-        broker=profile.connector,
-        connector_module=module,
-        config=config,
-        intent=intent,
-        place_kwargs=place_kwargs,
-        session_id=session_id,
-    )
-    return _with_profile(profile, result)
+    return _unsupported(profile, "orders.place")
 
 
 def cancel_order(
@@ -300,48 +112,12 @@ def cancel_order(
 ) -> dict[str, Any]:
     """Cancel an order via a connector profile.
 
-    Cancelling is risk-reducing, so it is not blocked by the mandate or the kill
-    switch (a halt should still let the user cancel resting orders). But a live
-    cancel IS a live action, so it is written to the audit ledger — every live
-    action must be logged (Red Lines).
+    Direct-SDK connectors have been removed. Only remote MCP connectors are
+    supported; order cancellation through the generic trading tool is not yet
+    implemented for remote MCP profiles.
     """
     profile = profile_by_id(profile_id)
-    if profile.transport != "broker_sdk":
-        return _unsupported(profile, "orders.cancel")
-    module = _sdk_module(profile.connector)
-    config = module.build_config(profile.config, overrides)
-    result = module.cancel_order(config, order_id, symbol=symbol)
-    if profile.environment == "live":
-        _audit_live_cancel(profile, order_id, symbol, result, session_id)
-    return _with_profile(profile, result)
-
-
-def _audit_live_cancel(profile, order_id, symbol, result, session_id) -> None:
-    """Write a live-action audit record for a live order cancellation (best-effort)."""
-    try:
-        from src.live.audit import LiveActionEvent, write_live_action
-
-        ok = isinstance(result, dict) and str(result.get("status", "")).lower() == "ok"
-        event = LiveActionEvent(
-            kind="order_cancelled",
-            session_id=session_id,
-            outcome="accepted" if ok else "error",
-            server=profile.connector,
-            remote_tool="cancel_order",
-            intent_normalized=f"cancel {order_id} {symbol or ''}".strip(),
-            mandate_snapshot_ref=None,
-            consent_record_ref=None,
-            broker_request={"order_id": order_id, "symbol": symbol},
-            broker_response=result if isinstance(result, dict) else {"raw": result},
-            gate_decision={"allowed": True, "decision": "cancel"},
-            error=None if ok else (result.get("error") if isinstance(result, dict) else "cancel failed"),
-        )
-        try:
-            write_live_action(event, event_callback=None, trace_writer=None)
-        except TypeError:
-            write_live_action(event)
-    except Exception:  # noqa: BLE001 - auditing must never block a cancel
-        pass
+    return _unsupported(profile, "orders.cancel")
 
 
 def profile_supports_live_runner(profile: TradingProfile) -> bool:
@@ -397,24 +173,6 @@ def _with_profile(profile: TradingProfile, payload: dict[str, Any]) -> dict[str,
     result["environment"] = profile.environment
     result["transport"] = profile.transport
     return result
-
-
-def _ibkr_config(profile: TradingProfile, overrides: dict[str, Any]):
-    """Build an IBKR local config from a trading profile and call overrides."""
-    from src.trading.connectors.ibkr.local import IBKRLocalConfig, config_path, load_config
-
-    default_cfg = IBKRLocalConfig.from_mapping(profile.config)
-    base = load_config()
-    if config_path().exists() and base.profile == default_cfg.profile:
-        cfg = base
-    else:
-        cfg = default_cfg
-    return cfg.with_overrides(
-        host=_clean(overrides.get("host")),
-        port=_int_or_none(overrides.get("port")),
-        client_id=_int_or_none(overrides.get("client_id")),
-        account=_clean(overrides.get("account")),
-    )
 
 
 def _remote_status(profile: TradingProfile) -> dict[str, Any]:

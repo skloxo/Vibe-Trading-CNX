@@ -14,20 +14,16 @@ from backtest.models import TradeRecord
 
 # ─── Annualisation factor mapping ───
 
-# mootdx (A-share) and futu (HK + A-share) are equity sources, so they mirror
-# the tushare/akshare column: 252 trading days and a 240-minute session. HK
-# sessions are marginally longer (~330 min) — an approximation in line with the
-# rest of this annualisation table; the key fix is that intraday mootdx/futu no
-# longer fall back to the bars_per_day=1 default, which mis-annualised vol/Sharpe.
-_TRADING_DAYS = {"tushare": 252, "yfinance": 252, "okx": 365, "akshare": 252, "ccxt": 365, "mootdx": 252, "futu": 252}
+# Annualisation table for supported data sources.
+_TRADING_DAYS = {"tushare": 252, "okx": 365, "akshare": 252, "mootdx": 252}
 _BARS_PER_DAY = {
-    "1m":  {"tushare": 240, "okx": 1440, "yfinance": 390, "akshare": 240, "ccxt": 1440, "mootdx": 240, "futu": 240},
-    "5m":  {"tushare": 48,  "okx": 288,  "yfinance": 78,  "akshare": 48,  "ccxt": 288,  "mootdx": 48,  "futu": 48},
-    "15m": {"tushare": 16,  "okx": 96,   "yfinance": 26,  "akshare": 16,  "ccxt": 96,   "mootdx": 16,  "futu": 16},
-    "30m": {"tushare": 8,   "okx": 48,   "yfinance": 13,  "akshare": 8,   "ccxt": 48,   "mootdx": 8,   "futu": 8},
-    "1H":  {"tushare": 4,   "okx": 24,   "yfinance": 7,   "akshare": 4,   "ccxt": 24,   "mootdx": 4,   "futu": 4},
-    "4H":  {"tushare": 1,   "okx": 6,    "yfinance": 2,   "akshare": 1,   "ccxt": 6,    "mootdx": 1,   "futu": 1},
-    "1D":  {"tushare": 1,   "okx": 1,    "yfinance": 1,   "akshare": 1,   "ccxt": 1,    "mootdx": 1,   "futu": 1},
+    "1m":  {"tushare": 240, "okx": 1440, "akshare": 240, "mootdx": 240},
+    "5m":  {"tushare": 48,  "okx": 288,  "akshare": 48,  "mootdx": 48},
+    "15m": {"tushare": 16,  "okx": 96,   "akshare": 16,  "mootdx": 16},
+    "30m": {"tushare": 8,   "okx": 48,   "akshare": 8,   "mootdx": 8},
+    "1H":  {"tushare": 4,   "okx": 24,   "akshare": 4,   "mootdx": 4},
+    "4H":  {"tushare": 1,   "okx": 6,    "akshare": 1,   "mootdx": 1},
+    "1D":  {"tushare": 1,   "okx": 1,    "akshare": 1,   "mootdx": 1},
 }
 
 
@@ -36,7 +32,7 @@ def calc_bars_per_year(interval: str = "1D", source: str = "tushare") -> int:
 
     Args:
         interval: Bar size (1m / 5m / 15m / 30m / 1H / 4H / 1D).
-        source: Data source (tushare / yfinance / okx).
+        source: Data source (tushare / okx / akshare / mootdx).
 
     Returns:
         Bars per year.

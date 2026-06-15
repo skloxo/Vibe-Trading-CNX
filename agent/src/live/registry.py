@@ -23,16 +23,19 @@ from src.live.classification import ToolClass, classify_tool
 from src.live.halt import halt_flag_set
 from src.live.order_guard import LiveOrderGuardTool
 from src.tools.mcp import MCPRemoteTool
-from src.trading.connectors.alpaca.classification import ALPACA_TOOL_CLASS
-from src.trading.connectors.binance.classification import BINANCE_TOOL_CLASS
-from src.trading.connectors.dhan.classification import DHAN_TOOL_CLASS
-from src.trading.connectors.futu.classification import FUTU_TOOL_CLASS
-from src.trading.connectors.ibkr.classification import IBKR_TOOL_CLASS
-from src.trading.connectors.longbridge.classification import LONGBRIDGE_TOOL_CLASS
-from src.trading.connectors.okx.classification import OKX_TOOL_CLASS
-from src.trading.connectors.robinhood.classification import ROBINHOOD_TOOL_CLASS
-from src.trading.connectors.shoonya.classification import SHOONYA_TOOL_CLASS
-from src.trading.connectors.tiger.classification import TIGER_TOOL_CLASS
+
+# All connector-specific classification maps removed during foreign-market
+# cleanup. Curated maps can be re-added when new connectors are implemented.
+ROBINHOOD_TOOL_CLASS: dict = {}
+IBKR_TOOL_CLASS: dict = {}
+TIGER_TOOL_CLASS: dict = {}
+LONGBRIDGE_TOOL_CLASS: dict = {}
+ALPACA_TOOL_CLASS: dict = {}
+OKX_TOOL_CLASS: dict = {}
+BINANCE_TOOL_CLASS: dict = {}
+FUTU_TOOL_CLASS: dict = {}
+DHAN_TOOL_CLASS: dict = {}
+SHOONYA_TOOL_CLASS: dict = {}
 
 logger = logging.getLogger(__name__)
 
