@@ -81,7 +81,7 @@ class _FakeLocalLoader:
     user has no Data Bridge config."""
 
     name = "local"
-    markets = {"a_share", "us_equity", "crypto"}
+    markets = {"a_share", "futures", "fund", "macro"}
     requires_auth = False
 
     def is_available(self) -> bool:

@@ -214,11 +214,7 @@ def test_no_longbridge_live_trade_profile() -> None:  # noqa: ANN
 def test_trade_profiles_have_place_capability() -> None:  # noqa: ANN
     from src.trading import profiles
 
-    # for pid in ("test-broker-live-trade", "okx-live-trade", "binance-live-trade", "futu-live-trade", "tiger-live-trade"):
-    #     prof = profiles.profile_by_id(pid)
-    #     assert prof.readonly is False
-    #     assert any("requires_mandate" in c for c in prof.capabilities)
-    pass  # all connector profiles removed
+    pass  # all foreign connector profiles removed
 
 
 # --------------------------------------------------------------------------- #

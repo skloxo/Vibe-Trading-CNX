@@ -30,7 +30,7 @@ _SKILLS_DIR = Path(__file__).resolve().parents[1] / "src" / "skills"
 _SKILLS_UNDER_TEST = ("tushare", "okx-market", "eastmoney", "sec-edgar", "yfinance")
 
 # Markdown link whose target is a references/*.md or scripts/*.py path, e.g.
-# "[label](tushare/references/foo/bar.md)" or "[ex](sec-edgar/scripts/x.py)".
+# "[label](tushare/references/foo/bar.md)"
 # The target itself may contain parentheses (some tushare filenames do, e.g.
 # "社融增量(月度).md"), so anchor on the trailing ".md)"/".py)" rather than the
 # first ")".

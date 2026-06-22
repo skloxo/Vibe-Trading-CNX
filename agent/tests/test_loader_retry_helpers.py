@@ -1,6 +1,6 @@
 """Unit tests for the shared loader retry/budget helpers.
 
-The okx integration tests already exercise these helpers via their
+The real loader integration tests already exercise these helpers via their
 real loaders; these tests pin the helper semantics directly so future
 loaders that adopt :func:`retry_with_budget` and :func:`check_budget`
 inherit the same guarantees:
@@ -441,27 +441,3 @@ def test_loader_cache_real_duckdb_round_trip(tmp_path, monkeypatch):
     # The cache preserves columns name and per-level index dtype, so a real
     # duckdb round-trip is byte-identical to the source frame.
     pd.testing.assert_frame_equal(restored, frame)
-
-
-    def fake_download(tickers, start_date, end_date, interval):
-        calls["n"] += 1
-        return pd.DataFrame(
-            {
-                "Open": [1.0, 2.0],
-                "High": [1.5, 2.5],
-                "Low": [0.5, 1.5],
-                "Close": [1.2, 2.2],
-                "Volume": [100, 200],
-            },
-            index=pd.DatetimeIndex(["2025-01-02", "2025-01-03"], name="Date"),
-        )
-
-    monkeypatch.setattr(yfl, "_download_history", fake_download)
-
-    loader = yfl.DataLoader()
-    first = loader.fetch(["AAPL.US"], "2025-01-01", "2025-01-03")
-    second = loader.fetch(["AAPL.US"], "2025-01-01", "2025-01-03")
-
-    assert calls["n"] == 1  # second fetch is served from cache, no re-download
-    assert "AAPL.US" in first and "AAPL.US" in second
-    pd.testing.assert_frame_equal(first["AAPL.US"], second["AAPL.US"])
