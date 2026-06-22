@@ -191,7 +191,7 @@ class Runner:
             existing = env.get("PYTHONPATH", "")
             env["PYTHONPATH"] = str(pythonpath_extra) + (os.pathsep + existing if existing else "")
 
-        # Preserve system proxy settings; data sources (OKX, akshare) need network access
+        # Preserve system proxy settings; data sources (akshare) need network access
         # NOTE: do NOT override HOME/USERPROFILE — data libraries (akshare)
         # cache downloads under ~/; overriding HOME causes full re-download every run.
 
