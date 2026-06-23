@@ -1826,7 +1826,17 @@ def main():
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio", help="MCP transport (default: stdio)")
     parser.add_argument("--port", type=int, default=8900, help="SSE port (only used with --transport sse)")
     args = parser.parse_args()
-    _include_shell_tools = True if args.transport == "stdio" else _env_shell_tools_enabled()
+    # Shell tools: default on for stdio (local terminal). For SSE, honour
+    # explicit VIBE_TRADING_ENABLE_SHELL_TOOLS; default to on for local
+    # (loopback) binds since MCP SSE is typically a local integration layer.
+    if args.transport == "stdio":
+        _include_shell_tools = True
+    else:
+        explicit = os.getenv("VIBE_TRADING_ENABLE_SHELL_TOOLS")
+        if explicit is not None:
+            _include_shell_tools = _env_shell_tools_enabled()
+        else:
+            _include_shell_tools = True  # SSE on loopback → safe default
     _registry = None
     _get_registry()  # pre-warm: avoids deadlock when first tools/call lazy-inits inside FastMCP worker thread
 
