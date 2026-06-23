@@ -91,6 +91,9 @@ def _default_file_roots() -> list[Path]:
         cwd / "data",
         home / ".vibe-trading" / "uploads",
         home / ".vibe-trading" / "imports",
+        # Allow access to all user-generated content under ~/.vibe-trading/
+        # (scripts, db, reports, stock_pools, skills, shadow_runs, etc.)
+        home / ".vibe-trading",
     ]
 
 
