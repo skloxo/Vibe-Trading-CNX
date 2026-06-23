@@ -257,7 +257,18 @@
     "keepCurrentKey": "Leave blank to keep the current key",
     "providerUsesOauth": "This provider uses OAuth. Run: {{command}}",
     "noApiKeyRequired": "This provider does not require an API key.",
-    "keepCurrentToken": "Leave blank to keep the current token"
+    "keepCurrentToken": "Leave blank to keep the current token",
+    "iwencaiApiKey": "iWenCai API Key",
+    "fredApiKey": "FRED API Key",
+    "iwencaiDesc": "Used for semantic stock screening via iWenCai (问财). Free access key required.",
+    "clearSavedKey": "Clear saved key",
+    "fredDesc": "Used for FRED macroeconomic data (CPI, GDP, unemployment, etc.). Free key from fred.stlouisfed.org.",
+    "featureFlags": "Feature Flags",
+    "featureFlagsDesc": "Runtime feature flags detected from environment variables.",
+    "shellTools": "Shell Tools",
+    "scheduler": "Scheduler",
+    "sessionRuntime": "Session Runtime",
+    "flagsReadFrom": "Flags are read from {{env1}}, {{env2}}, and {{env3}} in {{env_path}}."
   },
   "agent": {
     "connectionLostReconnect": "Connection lost, reconnecting…",

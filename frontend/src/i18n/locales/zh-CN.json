@@ -257,7 +257,18 @@
     "keepCurrentKey": "留空以保留当前密钥",
     "providerUsesOauth": "该提供商使用 OAuth。请运行: {{command}}",
     "noApiKeyRequired": "此提供商不需要 API 密钥。",
-    "keepCurrentToken": "留空以保留当前 Token"
+    "keepCurrentToken": "留空以保留当前 Token",
+    "iwencaiApiKey": "iWenCai API 密钥",
+    "fredApiKey": "FRED API 密钥",
+    "iwencaiDesc": "用于通过 iWenCai (问财) 进行语义化选股。需要免费的访问密钥。",
+    "clearSavedKey": "清除已保存的密钥",
+    "fredDesc": "用于 FRED 宏观经济数据（CPI、GDP、失业率等）。从 fred.stlouisfed.org 获取的免费密钥。",
+    "featureFlags": "功能开关 (Feature Flags)",
+    "featureFlagsDesc": "从环境变量中检测到的运行时功能开关。",
+    "shellTools": "Shell 工具",
+    "scheduler": "调度器 (Scheduler)",
+    "sessionRuntime": "会话运行时",
+    "flagsReadFrom": "功能开关从 {{env_path}} 中的 {{env1}}、{{env2}} 和 {{env3}} 读取。"
   },
   "agent": {
     "connectionLostReconnect": "连接已断开，正在重连…",
