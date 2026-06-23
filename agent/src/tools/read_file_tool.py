@@ -9,6 +9,7 @@ from typing import Any
 from src.agent.tools import BaseTool
 from src.tools.path_utils import safe_path as _safe_path
 from src.tools.path_utils import safe_run_dir as _safe_run_dir
+from src.tools.path_utils import _allowed_file_roots
 from src.tools.redaction import redact_internal_paths
 
 _OUTPUT_LIMIT = 50_000
@@ -58,6 +59,11 @@ class ReadFileTool(BaseTool):
         skills_dir = Path(__file__).resolve().parents[1] / "skills"
         if skills_dir.exists():
             allowed_roots.append(skills_dir.resolve())
+
+        # Add configured extra file roots (e.g. ~/.vibe-trading/scripts/, ~/.vibe-trading/db/)
+        for extra_root in _allowed_file_roots():
+            if extra_root not in allowed_roots:
+                allowed_roots.append(extra_root)
 
         # Strip redundant "skills/" prefix that LLMs sometimes add
         paths_to_try = [file_path]
