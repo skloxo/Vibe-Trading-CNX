@@ -461,7 +461,7 @@ export function Settings() {
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{"iWenCai API Key"}</span>
+              <span className={labelClass}>{i18n.t("settings.iwencaiApiKey")}</span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -469,13 +469,13 @@ export function Settings() {
                   value={iwencaiKey}
                   onChange={(event) => setIwencaiKey(event.target.value)}
                   className={`${fieldClass} pl-9`}
-                  placeholder={dataSettings.iwencai_key_configured ? "Configured" : "Leave blank to keep the current key"}
+                  placeholder={dataSettings.iwencai_key_configured ? i18n.t("settings.configured") : i18n.t("settings.keepCurrentKey")}
                   autoComplete="current-password"
                   disabled={clearIwencaiKey}
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>{"Used for semantic stock screening via iWenCai (\u95ee\u8d22). Free access key required."}</span>
+                <span className={hintClass}>{i18n.t("settings.iwencaiDesc")}</span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -486,13 +486,13 @@ export function Settings() {
                     }}
                     className="h-3.5 w-3.5 accent-primary"
                   />
-                  {"Clear saved key"}
+                  {i18n.t("settings.clearSavedKey")}
                 </label>
               </div>
             </label>
 
             <label className="grid gap-2">
-              <span className={labelClass}>{"FRED API Key"}</span>
+              <span className={labelClass}>{i18n.t("settings.fredApiKey")}</span>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -500,13 +500,13 @@ export function Settings() {
                   value={fredApiKey}
                   onChange={(event) => setFredApiKey(event.target.value)}
                   className={`${fieldClass} pl-9`}
-                  placeholder={dataSettings.fred_api_key_configured ? "Configured" : "Leave blank to keep the current key"}
+                  placeholder={dataSettings.fred_api_key_configured ? i18n.t("settings.configured") : i18n.t("settings.keepCurrentKey")}
                   autoComplete="current-password"
                   disabled={clearFredApiKey}
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className={hintClass}>{"Used for FRED macroeconomic data (CPI, GDP, unemployment, etc.). Free key from fred.stlouisfed.org."}</span>
+                <span className={hintClass}>{i18n.t("settings.fredDesc")}</span>
                 <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -517,7 +517,7 @@ export function Settings() {
                     }}
                     className="h-3.5 w-3.5 accent-primary"
                   />
-                  {"Clear saved key"}
+                  {i18n.t("settings.clearSavedKey")}
                 </label>
               </div>
             </label>
@@ -561,32 +561,37 @@ export function Settings() {
           <div className="mb-5 space-y-1">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-primary" />
-              <h2 className="text-base font-semibold">{"Feature Flags"}</h2>
+              <h2 className="text-base font-semibold">{i18n.t("settings.featureFlags")}</h2>
             </div>
-            <p className="text-sm text-muted-foreground">{"Runtime feature flags detected from environment variables."}</p>
+            <p className="text-sm text-muted-foreground">{i18n.t("settings.featureFlagsDesc")}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex items-center justify-between rounded-md border bg-muted/20 px-4 py-3">
-              <span className="text-sm font-medium">{"Shell Tools"}</span>
+              <span className="text-sm font-medium">{i18n.t("settings.shellTools")}</span>
               <span className={featureFlags.shell_tools_enabled ? "text-success" : "text-muted-foreground"}>
-                {featureFlags.shell_tools_enabled ? "\u2705" : "\u274c"}
+                {featureFlags.shell_tools_enabled ? "✅" : "❌"}
               </span>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/20 px-4 py-3">
-              <span className="text-sm font-medium">{"Scheduler"}</span>
+              <span className="text-sm font-medium">{i18n.t("settings.scheduler")}</span>
               <span className={featureFlags.scheduler_enabled ? "text-success" : "text-muted-foreground"}>
-                {featureFlags.scheduler_enabled ? "\u2705" : "\u274c"}
+                {featureFlags.scheduler_enabled ? "✅" : "❌"}
               </span>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/20 px-4 py-3">
-              <span className="text-sm font-medium">{"Session Runtime"}</span>
+              <span className="text-sm font-medium">{i18n.t("settings.sessionRuntime")}</span>
               <span className={featureFlags.session_runtime_enabled ? "text-success" : "text-muted-foreground"}>
-                {featureFlags.session_runtime_enabled ? "\u2705" : "\u274c"}
+                {featureFlags.session_runtime_enabled ? "✅" : "❌"}
               </span>
             </div>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            {"Flags are read from "}<span className="font-mono">{"VIBE_TRADING_ENABLE_SHELL_TOOLS"}</span>{", "}<span className="font-mono">{"VIBE_TRADING_ENABLE_SCHEDULER"}</span>{", and "}<span className="font-mono">{"ENABLE_SESSION_RUNTIME"}</span>{" in "}<span className="font-mono">{featureFlags.env_path}</span>{"."}
+            {i18n.t("settings.flagsReadFrom", {
+              env1: "VIBE_TRADING_ENABLE_SHELL_TOOLS",
+              env2: "VIBE_TRADING_ENABLE_SCHEDULER",
+              env3: "ENABLE_SESSION_RUNTIME",
+              env_path: featureFlags.env_path
+            })}
           </p>
         </div>
       )}
