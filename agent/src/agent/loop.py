@@ -20,6 +20,7 @@ import os
 import queue
 import threading
 import time as _time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -49,6 +50,7 @@ REASONING_DELTA_MIN_INTERVAL_S = float(os.getenv("VT_REASONING_DELTA_MIN_INTERVA
 STREAM_RETRY_DELAY_S = float(os.getenv("VT_STREAM_RETRY_DELAY_S", "1.0"))
 TOOL_TIMEOUT_SECONDS = float(os.getenv("VIBE_TRADING_TOOL_TIMEOUT_SECONDS", "1800"))
 GOAL_MAX_CONTINUATIONS = int(os.getenv("VIBE_TRADING_GOAL_MAX_CONTINUATIONS", "3"))
+LLM_USAGE_ARTIFACT = "llm_usage.json"
 
 # Layer 2: Context collapse thresholds
 COLLAPSE_THRESHOLD = int(TOKEN_THRESHOLD * 0.7)
@@ -61,6 +63,88 @@ COLLAPSE_TAIL = 500
 TAIL_TOKEN_BUDGET = 20_000
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_usage_int(value: Any) -> int:
+    """Coerce provider token counts to non-negative ints."""
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_llm_usage(usage: Any) -> dict[str, int] | None:
+    """Normalize provider-reported usage metadata without estimating tokens."""
+    if usage is None:
+        return None
+    if not isinstance(usage, dict):
+        try:
+            usage = dict(usage)
+        except (TypeError, ValueError):
+            return None
+
+    input_tokens = _coerce_usage_int(usage.get("input_tokens"))
+    output_tokens = _coerce_usage_int(usage.get("output_tokens"))
+    total_tokens = _coerce_usage_int(usage.get("total_tokens"))
+    if total_tokens == 0 and (input_tokens or output_tokens):
+        total_tokens = input_tokens + output_tokens
+    if not (input_tokens or output_tokens or total_tokens):
+        return None
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _new_llm_usage_summary(llm: Any) -> dict[str, Any]:
+    """Create the run-scoped provider usage accumulator."""
+    provider = os.getenv("LANGCHAIN_PROVIDER", "openai").strip() or "openai"
+    model = getattr(llm, "model_name", None) or os.getenv("LANGCHAIN_MODEL_NAME", "").strip()
+    return {
+        "provider": provider,
+        "model": model,
+        "totals": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "calls": 0,
+        },
+        "per_iteration": [],
+    }
+
+
+def _record_llm_usage(
+    run_dir: Path,
+    summary: dict[str, Any],
+    usage: Any,
+    iteration: int,
+) -> dict[str, int] | None:
+    """Accumulate and persist one provider-reported usage event."""
+    normalized = _normalize_llm_usage(usage)
+    if normalized is None:
+        return None
+
+    totals = summary.setdefault("totals", {})
+    totals["input_tokens"] = int(totals.get("input_tokens") or 0) + normalized["input_tokens"]
+    totals["output_tokens"] = int(totals.get("output_tokens") or 0) + normalized["output_tokens"]
+    totals["total_tokens"] = int(totals.get("total_tokens") or 0) + normalized["total_tokens"]
+    totals["calls"] = int(totals.get("calls") or 0) + 1
+    summary.setdefault("per_iteration", []).append({"iter": iteration, **normalized})
+    summary["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    try:
+        path = run_dir / LLM_USAGE_ARTIFACT
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        tmp_path.replace(path)
+    except OSError as exc:
+        logger.debug("LLM usage artifact write skipped: %s", exc)
+
+    return normalized
 
 
 def _redact_trace_result(result: str) -> str:
@@ -369,7 +453,7 @@ class AgentLoop:
         self._event_callback = event_callback
         self.max_iterations = max_iterations
         self._called_ok: set[str] = set()
-        self._cancelled: bool = False
+        self._cancel_event = threading.Event()
         self._previous_summary: str = ""
         self._persistent_memory = persistent_memory
         self._run_iteration: int = 0
@@ -377,9 +461,11 @@ class AgentLoop:
     def cancel(self) -> None:
         """Cancel the current loop.
 
-        The main loop exits on the next iteration check.
+        Sets a thread-safe flag polled at every iteration boundary, per LLM
+        stream chunk, and between tool batches, so a running turn stops at the
+        next cooperative checkpoint instead of only at the next iteration.
         """
-        self._cancelled = True
+        self._cancel_event.set()
 
     def run(self, user_message: str, history: Optional[List[Dict[str, Any]]] = None, session_id: str = "") -> Dict[str, Any]:
         """Run the ReAct loop synchronously.
@@ -393,7 +479,7 @@ class AgentLoop:
             Execution result dict.
         """
         # Reset per-run state (safe for reuse across multiple run() calls)
-        self._cancelled = False
+        self._cancel_event.clear()
         self._called_ok = set()
         self._previous_summary = ""
 
@@ -446,13 +532,14 @@ class AgentLoop:
         iteration = 0
         final_content = ""
         empty_model_response_iter: int | None = None
+        llm_usage_summary = _new_llm_usage_summary(self.llm)
         goal_continuations = 0
         goal_last_progress: tuple[int, int] | None = None
         wrap_up_at = max(1, int(self.max_iterations * 0.8))
 
         try:
             while iteration < self.max_iterations:
-                if self._cancelled:
+                if self._cancel_event.is_set():
                     trace.write({"type": "cancelled", "iter": self._run_iteration + 1})
                     logger.info("AgentLoop cancelled by user")
                     break
@@ -466,8 +553,7 @@ class AgentLoop:
                 notifs = bg.drain_notifications()
                 if notifs:
                     notif_text = "\n".join(f"[bg:{n['task_id']}] {n['status']}: {n['result']}" for n in notifs)
-                    messages.append({"role": "user", "content": f"<background-results>\n{notif_text}\n</background-results>"})
-                    messages.append({"role": "assistant", "content": "Noted background results."})
+                    messages.append({"role": "user", "content": f"<background-results>\n{notif_text}\n</background-results>\n\n<system>Continue processing with the background results above.</system>"})
 
                 # Layer 1: microcompact (every iteration)
                 _microcompact(messages)
@@ -543,6 +629,7 @@ class AgentLoop:
                         tools=tool_defs,
                         on_text_chunk=_on_text_chunk,
                         on_reasoning_chunk=_on_reasoning_chunk,
+                        should_cancel=self._cancel_event.is_set,
                     )
                 except ProviderStreamError as exc:
                     # One retry for transient mid-stream failures (connection
@@ -575,20 +662,31 @@ class AgentLoop:
                         tools=tool_defs,
                         on_text_chunk=_on_text_chunk,
                         on_reasoning_chunk=_on_reasoning_chunk,
+                        should_cancel=self._cancel_event.is_set,
                     )
-                usage = getattr(response, "usage_metadata", None) or {}
-                if usage:
+
+                # Cancelled mid-stream: discard this turn's partial response and
+                # end the run now, without executing any of its tool calls.
+                if self._cancel_event.is_set():
+                    break
+
+                usage = getattr(response, "usage_metadata", None)
+                usage_delta = _record_llm_usage(
+                    run_dir,
+                    llm_usage_summary,
+                    usage,
+                    current_iter,
+                )
+                if usage_delta:
                     self._emit(
                         "llm_usage",
                         {
-                            "input_tokens": int(usage.get("input_tokens") or 0),
-                            "output_tokens": int(usage.get("output_tokens") or 0),
-                            "total_tokens": int(usage.get("total_tokens") or 0),
+                            **usage_delta,
                             "iter": current_iter,
                         },
                     )
                 if active_goal_id and session_id:
-                    token_delta = int(usage.get("total_tokens") or 0) if usage else 0
+                    token_delta = int(usage_delta.get("total_tokens") or 0) if usage_delta else 0
                     turn_delta = 0 if goal_turn_accounted else 1
                     if token_delta or turn_delta:
                         try:
@@ -764,7 +862,7 @@ class AgentLoop:
         # returned dict so SessionService can surface a meaningful UI
         # message instead of "Execution failed: unknown" (issue #114).
         final_reason: str | None = None
-        if self._cancelled:
+        if self._cancel_event.is_set():
             final_reason = "cancelled by user"
             state_store.mark_failure(run_dir, final_reason)
             final_status = "cancelled"
@@ -840,6 +938,10 @@ class AgentLoop:
         focus_topic = ""
         to_execute = []
 
+        # Cancelled before this turn's tools ran — skip execution entirely.
+        if self._cancel_event.is_set():
+            return compact_requested, focus_topic
+
         for tc in tool_calls:
             # Layer 4: compact tool — mark then defer execution
             if tc.name == "compact":
@@ -911,6 +1013,10 @@ class AgentLoop:
             batches.append(("parallel", current_ro))
 
         for mode, batch in batches:
+            # Stop launching further tool batches once cancelled — the current
+            # batch (if any) finishes, but no new work starts.
+            if self._cancel_event.is_set():
+                break
             if mode == "parallel" and len(batch) > 1:
                 self._execute_parallel(batch, context, messages, trace, react_trace, iteration)
             else:
@@ -1315,8 +1421,7 @@ class AgentLoop:
 
         messages.clear()
         messages.append(system_msg)
-        messages.append({"role": "user", "content": compressed})
-        messages.append({"role": "assistant", "content": "Understood. Continuing from the summary."})
+        messages.append({"role": "user", "content": f"{compressed}\n\n<system>Continue from the summary above.</system>"})
         messages.extend(tail)
 
         # Fix orphaned tool pairs in the reconstructed message list

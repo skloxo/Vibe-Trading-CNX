@@ -31,12 +31,12 @@ def test_default_path_uses_env_override(storage_path: Path) -> None:
 def test_create_persists_hypothesis(storage_path: Path) -> None:
     registry = HypothesisRegistry()
     hyp = registry.create(
-        title="BTC funding mean reversion",
-        thesis="Extreme perp funding mean-reverts over the next session.",
-        universe="BTC-USDT perpetuals",
-        signal_definition="zscore(funding) > 2",
-        data_sources=["okx", "ccxt"],
-        skills=["perp-funding-basis"],
+        title="A-share momentum reversal",
+        thesis="Post-gap momentum reversal works in A-shares.",
+        universe="A-shares",
+        signal_definition="gap_down_pct > 3%",
+        data_sources=["tushare", "akshare"],
+        skills=["technical-basic"],
     )
 
     assert hyp.hypothesis_id.startswith("hyp_")
@@ -45,8 +45,8 @@ def test_create_persists_hypothesis(storage_path: Path) -> None:
 
     reloaded = HypothesisRegistry().list()
     assert len(reloaded) == 1
-    assert reloaded[0].title == "BTC funding mean reversion"
-    assert reloaded[0].data_sources == ["okx", "ccxt"]
+    assert reloaded[0].title == "A-share momentum reversal"
+    assert reloaded[0].data_sources == ["tushare", "akshare"]
 
 
 def test_update_status_and_invalidation_notes(storage_path: Path) -> None:
@@ -118,7 +118,7 @@ def test_tool_wrappers_use_env_isolated_storage(storage_path: Path) -> None:
     created = json.loads(CreateHypothesisTool().execute(
         title="Tool-created carry",
         thesis="Carry works when trend agrees.",
-        data_sources=["yfinance"],
+        data_sources=["akshare"],
     ))
     assert created["status"] == "ok"
     hypothesis_id = created["hypothesis"]["hypothesis_id"]

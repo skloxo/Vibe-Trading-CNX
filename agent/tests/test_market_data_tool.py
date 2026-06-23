@@ -30,16 +30,16 @@ def test_market_data_json_is_strict_when_loader_returns_nan():
             return {"X.US": df}
 
     text = fetch_market_data_json(
-        codes=["X.US"],
+        codes=["000001.SZ"],
         start_date="2026-01-01",
         end_date="2026-01-02",
-        source="yfinance",
+        source="tencent",
         loader_resolver=lambda source: _Loader,
     )
 
     assert "NaN" not in text
     payload = json.loads(text)
-    assert payload["X.US"][0]["high"] is None
+    assert payload["000001.SZ"][0]["high"] is None
 
 
 def test_swarm_registry_can_expose_local_get_market_data_tool():
@@ -50,7 +50,7 @@ def test_swarm_registry_can_expose_local_get_market_data_tool():
 
 def test_every_market_data_worker_has_get_market_data_tool():
     """Workers with OHLCV-capable skills must expose the loader-backed tool (#198)."""
-    market_data_skills = {"tushare", "yfinance", "okx-market"}
+    market_data_skills = {"tushare"}
     missing = []
     for summary in list_presets():
         preset = load_preset(summary["name"])
@@ -68,10 +68,10 @@ def test_worker_prompt_prioritizes_get_market_data_for_ohlcv():
         role="Analyst",
         system_prompt="Analyze prices.",
         tools=["load_skill", "get_market_data", "write_file"],
-        skills=["yfinance"],
+        skills=["tushare"],
     )
 
-    prompt = build_worker_prompt(spec, {}, "  - yfinance: market data")
+    prompt = build_worker_prompt(spec, {}, "  - tushare: market data")
 
     assert "Market Data Tool Policy" in prompt
     assert "call `get_market_data` before writing raw provider scripts" in prompt

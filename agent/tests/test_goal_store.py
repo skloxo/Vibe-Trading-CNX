@@ -171,7 +171,7 @@ def test_append_evidence_rejects_stale_expected_goal_id(tmp_path: Path) -> None:
             evidence=EvidenceInput(
                 criterion_id=criterion.criterion_id,
                 text="TSLA outperformed QQQ over the sample window.",
-                source_provider="yfinance",
+                source_provider="akshare",
                 data_as_of="2026-05-23T16:00:00-04:00",
                 tool_call_id="tool_123",
             ),
@@ -325,7 +325,7 @@ def test_complete_goal_with_verified_evidence(tmp_path: Path, monkeypatch: pytes
         evidence=EvidenceInput(
             criterion_id=criterion.criterion_id,
             text="NVDA outperformed QQQ over the last 5 sessions.",
-            source_provider="yfinance",
+            source_provider="akshare",
             data_as_of="2026-05-23T16:00:00-04:00",
             artifact_path=str(artifact),
             artifact_hash=_sha256(artifact),

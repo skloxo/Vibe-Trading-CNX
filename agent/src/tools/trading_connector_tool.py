@@ -54,7 +54,7 @@ def _num_or_none(value: Any) -> float | None:
 TRADING_COMMON_PARAMETERS = {
     "connection": {
         "type": "string",
-        "description": "Trading connector profile id, e.g. ibkr-paper-local or robinhood-live-mcp. Defaults to the selected profile.",
+        "description": "Trading connector profile id, e.g. paper-local or robinhood-live-mcp. Defaults to the selected profile.",
     },
     "host": {
         "type": "string",
@@ -120,7 +120,7 @@ class TradingSelectConnectionTool(BaseTool):
         "properties": {
             "connection": {
                 "type": "string",
-                "description": "Profile id to select, e.g. ibkr-paper-local.",
+                "description": "Profile id to select, e.g. paper-local.",
             }
         },
         "required": ["connection"],
@@ -268,8 +268,8 @@ class TradingHistoryTool(BaseTool):
         "type": "object",
         "properties": {
             **TradingQuoteTool.parameters["properties"],
-            "duration": {"type": "string", "default": "30 D", "description": "IBKR (local_tws) duration string."},
-            "bar_size": {"type": "string", "default": "1 day", "description": "IBKR (local_tws) bar size."},
+            "duration": {"type": "string", "default": "30 D", "description": "Trading duration string, e.g. '30 D'."},
+            "bar_size": {"type": "string", "default": "1 day", "description": "Trading bar size, e.g. '1 day'."},
             "what_to_show": {"type": "string", "default": "TRADES"},
             "use_rth": {"type": "boolean", "default": True},
             "period": {

@@ -329,7 +329,7 @@ def _load_csi300_panel(start: str, end: str) -> dict[str, pd.DataFrame]:
 
 
 def _load_sp500_panel(start: str, end: str) -> dict[str, pd.DataFrame]:
-    """SP500 panel via yfinance. Adds vwap = (O+H+L+C)/4 fallback for alpha101.
+    """SP500 panel via registry loader (us_equity). Adds vwap = (O+H+L+C)/4 fallback for alpha101.
 
     Survivorship-bias warning: ``_fetch_sp500_constituents`` returns Wikipedia's
     *current* member list, not a point-in-time snapshot. Names that dropped out
@@ -350,7 +350,7 @@ def _load_sp500_panel(start: str, end: str) -> dict[str, pd.DataFrame]:
         constituent_source, _SP500_CONSTITUENT_SOURCE_DATE,
     )
 
-    # yfinance loader expects project-style symbols (``AAPL.US``).
+    # Registry loader expects project-style symbols (``AAPL.US``).
     project_codes = [f"{c}.US" for c in codes]
     from backtest.loaders.registry import resolve_loader
 
@@ -397,7 +397,7 @@ def _fetch_sp500_constituents() -> list[str]:
         for tbl in tables:
             if "Symbol" in tbl.columns:
                 tickers = tbl["Symbol"].astype(str).str.strip().tolist()
-                # yfinance prefers ``BRK-B`` over ``BRK.B`` — normalise
+                # Normalise: ``BRK.B`` → ``BRK-B`` for loader compatibility
                 tickers = [t.replace(".", "-") for t in tickers if t and t != "nan"]
                 logger.info("sp500: %d tickers from Wikipedia", len(tickers))
                 return tickers

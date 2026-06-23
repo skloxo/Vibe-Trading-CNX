@@ -36,7 +36,7 @@ def _loader_with_rows(n: int):
 
 def _call(monkeypatch, n, **kw):
     monkeypatch.setattr(mcp_server, "_get_loader", lambda src: _loader_with_rows(n))
-    return json.loads(_gmd(codes=["X.US"], start_date="2025-01-01", end_date="2026-01-01", source="yfinance", **kw))
+    return json.loads(_gmd(codes=["X.US"], start_date="2025-01-01", end_date="2026-01-01", source="akshare", **kw))
 
 
 def test_oversized_symbol_is_capped_with_metadata(monkeypatch):
@@ -113,7 +113,7 @@ def test_multi_symbol_capped_independently(monkeypatch):
             codes=["BIG.US", "SMALL.US"],
             start_date="2025-01-01",
             end_date="2026-01-01",
-            source="yfinance",
+            source="akshare",
         )
     )
     assert isinstance(out["BIG.US"], dict) and out["BIG.US"]["truncated"] is True

@@ -71,8 +71,7 @@ def _rolling_correlation_matrix(
     for code in codes:
         ts = closes[code]
         # Normalize to date-only (midnight) so that cross-market assets
-        # (e.g. crypto via OKX/CCXT at UTC midnight vs US equity via
-        # yfinance at EDT midnight = 04:00 UTC) align correctly.
+        # (e.g. crypto at UTC midnight vs US equity at EDT midnight) align correctly.
         ts.index = ts.index.normalize()
         rets = ts.pct_change().dropna()
         rets.name = code
@@ -149,15 +148,8 @@ def compute_correlation_matrix(
         try:
             loader = resolve_loader(market)
         except Exception:
-            # Fall back to yfinance for us_equity / hk_equity
-            try:
-                from backtest.loaders.registry import LOADER_REGISTRY
-                if "yfinance" in LOADER_REGISTRY:
-                    loader = LOADER_REGISTRY["yfinance"]()
-                else:
-                    continue
-            except Exception:
-                continue
+            # TODO: removed connector cleanup — yfinance fallback removed
+            continue
 
         try:
             result = loader.fetch(

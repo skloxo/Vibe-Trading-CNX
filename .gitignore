@@ -90,3 +90,16 @@ AGENTS.md
 # Alpha Zoo wiki artifacts (generated, not source)
 wiki/alpha-library/manifest.json
 wiki/alpha-library/content/
+
+# Screener temp files
+screener_*.log
+screener_*.csv
+screener_*.json
+final_picks.csv
+*.bak
+
+# Local DB
+agent/stocks.db
+
+# OpenClaw integration docs (keep in openclaw repo instead)
+.openclaw-*.md

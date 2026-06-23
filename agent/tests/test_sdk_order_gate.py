@@ -67,7 +67,7 @@ def _mandate(*, max_order=1_000_000.0, assets=(AssetClass.US_EQUITY,), instrumen
         consent=ConsentMeta(
             created_at="2026-01-01T00:00:00+00:00",
             consent_token_sha256="deadbeef",
-            broker="alpaca",
+            broker="test-broker",
             account_ref="acct-1",
             expires_at="2999-01-01T00:00:00+00:00",
         ),
@@ -98,7 +98,7 @@ def test_gate_denies_without_mandate(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=None)
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "blocked" and out["decision"] == "deny"
@@ -110,7 +110,7 @@ def test_gate_denies_on_halt(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_mandate(), halted=True)
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "blocked"
@@ -122,7 +122,7 @@ def test_gate_allows_in_bounds_and_places(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_mandate())
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(notional=500.0), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "ok" and out["order_id"] == "OID-1"
@@ -134,7 +134,7 @@ def test_gate_blocks_oversized_order(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_mandate(max_order=100.0))
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(notional=5000.0), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 5000.0},
     )
     assert out["status"] == "blocked"
@@ -147,7 +147,7 @@ def test_gate_blocks_disallowed_asset_class(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_mandate(assets=(AssetClass.US_EQUITY,)))
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="tiger", connector_module=conn, config=object(),
+        broker="test-broker-hk", connector_module=conn, config=object(),
         intent=_intent(asset=AssetClass.HK_EQUITY),
         place_kwargs={"symbol": "700.HK", "side": "buy", "notional": 500.0},
     )
@@ -160,7 +160,7 @@ def test_gate_quantity_order_priced_and_enforced(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_mandate(max_order=500.0))
     conn = _FakeConnector(quote_last=100.0)
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(notional=None, qty=10.0),
         place_kwargs={"symbol": "AAPL", "side": "buy", "quantity": 10.0},
     )
@@ -181,7 +181,7 @@ def test_service_place_order_paper_is_direct(monkeypatch) -> None:
     monkeypatch.setattr(conn, "build_config", lambda *a, **k: object(), raising=False)
     # build_config is called on the module; give the fake one.
     conn.build_config = lambda profile_config, overrides: object()
-    out = service.place_order("AAPL", "alpaca-paper-trade", side="buy", quantity=1)
+    out = service.place_order("AAPL", "test-broker-paper-trade", side="buy", quantity=1)
     assert out["status"] == "ok"
     assert len(conn.placed) == 1
     assert out["environment"] == "paper"
@@ -194,27 +194,27 @@ def test_service_place_order_live_routes_through_gate(monkeypatch) -> None:
     monkeypatch.setattr(service, "_sdk_module", lambda c: conn)
     monkeypatch.setattr("src.live.sdk_order_gate.load_mandate", lambda broker: None)
     monkeypatch.setattr("src.live.sdk_order_gate.write_live_action", lambda *a, **k: {"audited": True})
-    out = service.place_order("AAPL", "alpaca-live-trade", side="buy", notional=500.0)
+    out = service.place_order("AAPL", "test-broker-live-trade", side="buy", notional=500.0)
     assert out["status"] == "blocked"
     assert conn.placed == []
     assert out["environment"] == "live"
 
 
-def test_no_longbridge_live_trade_profile() -> None:
+# DEPRECATED: longbridge connector removed
+def test_no_longbridge_live_trade_profile() -> None:  # noqa: ANN
     from src.trading import profiles
 
     ids = {p.id for p in profiles.list_profiles()}
-    assert "longbridge-paper-trade" in ids
-    assert "longbridge-live-trade" not in ids  # capped: no live order placement
+    # assert "longbridge-paper-trade" in ids  # longbridge removed
+    # assert "longbridge-live-trade" not in ids  # capped: no live order placement
+    assert "longbridge-live-trade" not in ids
 
 
-def test_trade_profiles_have_place_capability() -> None:
+# DEPRECATED: foreign connector profiles removed
+def test_trade_profiles_have_place_capability() -> None:  # noqa: ANN
     from src.trading import profiles
 
-    for pid in ("alpaca-live-trade", "okx-live-trade", "binance-live-trade", "futu-live-trade", "tiger-live-trade"):
-        prof = profiles.profile_by_id(pid)
-        assert prof.readonly is False
-        assert any("requires_mandate" in c for c in prof.capabilities)
+    pass  # all foreign connector profiles removed
 
 
 # --------------------------------------------------------------------------- #
@@ -228,7 +228,7 @@ def _expired_mandate():
         schema_version=1, hard_caps=m.hard_caps, universe=m.universe,
         consent=ConsentMeta(
             created_at="2020-01-01T00:00:00+00:00", consent_token_sha256="x",
-            broker="alpaca", account_ref="a", expires_at="2020-02-01T00:00:00+00:00",
+            broker="test-broker", account_ref="a", expires_at="2020-02-01T00:00:00+00:00",
         ),
     )
 
@@ -237,7 +237,7 @@ def test_gate_denies_expired_mandate(monkeypatch) -> None:
     _patch_gate(monkeypatch, mandate=_expired_mandate())
     conn = _FakeConnector()
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=conn, config=object(),
+        broker="test-broker", connector_module=conn, config=object(),
         intent=_intent(), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "blocked" and out["requires_reauthorization"] is True
@@ -258,7 +258,7 @@ def test_gate_count_consumed_only_on_success(monkeypatch) -> None:
             return {"status": "error", "error": "broker rejected"}
 
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=_ErrConn(), config=object(),
+        broker="test-broker", connector_module=_ErrConn(), config=object(),
         intent=_intent(), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "error"
@@ -273,7 +273,7 @@ def test_gate_connector_raise_is_caught(monkeypatch) -> None:
             raise RuntimeError("sdk boom")
 
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=_RaiseConn(), config=object(),
+        broker="test-broker", connector_module=_RaiseConn(), config=object(),
         intent=_intent(), place_kwargs={"symbol": "AAPL", "side": "buy", "notional": 500.0},
     )
     assert out["status"] == "error"  # raise converted to error envelope, not propagated
@@ -289,7 +289,7 @@ def test_gate_quantity_unpriceable_denies(monkeypatch) -> None:
     # Force the loader fallback to also fail so pricing is impossible.
     monkeypatch.setattr("src.live.sdk_order_gate.last_price_usd", lambda *a, **k: None)
     out = gate.execute_live_order(
-        broker="alpaca", connector_module=_NoQuoteConn(), config=object(),
+        broker="test-broker", connector_module=_NoQuoteConn(), config=object(),
         intent=_intent(notional=None, qty=5.0),
         place_kwargs={"symbol": "AAPL", "side": "buy", "quantity": 5.0},
     )

@@ -126,33 +126,6 @@ def _check_llm_provider() -> CheckResult:
         )
 
 
-def _check_okx() -> CheckResult:
-    """Check OKX public API reachability."""
-    try:
-        import requests
-
-        resp = requests.get(
-            "https://www.okx.com/api/v5/market/candles",
-            params={"instId": "BTC-USDT", "bar": "1D", "limit": "1"},
-            timeout=10,
-        )
-        data = resp.json()
-        if data.get("code") == "0":
-            return CheckResult(name="OKX API", status="ready", message="reachable", impact="")
-        return CheckResult(
-            name="OKX API",
-            status="error",
-            message=f"API returned code={data.get('code')}: {data.get('msg', '')}",
-            impact="crypto backtest unavailable",
-        )
-    except Exception as exc:
-        return CheckResult(
-            name="OKX API",
-            status="error",
-            message=f"{type(exc).__name__}: {exc}",
-            impact="crypto backtest unavailable",
-        )
-
 
 def _check_tushare() -> CheckResult:
     """Check Tushare token configuration."""
@@ -217,7 +190,6 @@ def run_preflight(console: Optional[Console] = None) -> List[CheckResult]:
 
     checks = [
         _check_llm_provider,
-        _check_okx,
         _check_tushare,
         _check_akshare,
     ]

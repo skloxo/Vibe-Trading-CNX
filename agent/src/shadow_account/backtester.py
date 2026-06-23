@@ -239,7 +239,7 @@ def _summarize_artifacts(
 
     # Only surface an error when we genuinely have no metrics. A non-ok
     # status with usable metrics typically means a transient data-source
-    # warning (e.g. yfinance flaked on one market) — downgrading to ok is
+    # warning (e.g. a data source flaked on one market) — downgrading to ok is
     # more faithful to what the user actually has.
     if not combined and status != "ok":
         combined = {"error": payload.get("stderr", "")[-200:] or "backtest failed"}

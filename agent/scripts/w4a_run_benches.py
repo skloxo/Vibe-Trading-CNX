@@ -9,7 +9,7 @@ Output:
     ~/.vibe-trading/reports/bench_summary.json      — aggregate summary
 
 Safe to re-run; each bench result is cached by ``_load_universe_panel`` so the
-expensive Tushare/yfinance fetches only happen once per (universe, period).
+expensive Tushare fetches only happen once per (universe, period).
 """
 
 from __future__ import annotations

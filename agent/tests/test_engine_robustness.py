@@ -356,10 +356,12 @@ class TestBacktestConfigSchema:
             )
 
     def test_mootdx_and_futu_sources_accepted(self) -> None:
-        """mootdx and futu are registered loaders, so config validation must
-        accept them. Regression: ``_VALID_SOURCES`` drifted and rejected both
-        even though the agent-facing backtest tool already allowed them."""
-        for src in ("mootdx", "futu"):
+        """mootdx is a registered loader, so config validation must
+        accept it. Regression: ``_VALID_SOURCES`` drifted and rejected it
+        even though the agent-facing backtest tool already allowed it."""
+        # DEPRECATED: futu removed during foreign-market cleanup
+        # for src in ("mootdx", "futu"):
+        for src in ("mootdx",):
             c = BacktestConfigSchema(
                 codes=["000001.SZ"],
                 start_date="2025-01-01",

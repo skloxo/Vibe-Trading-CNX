@@ -863,7 +863,7 @@ def _format_tool_result_preview(tool: str, status: str, preview: str) -> str:
 # protected ``loop.py``.
 
 _PROPOSAL_TOOL_NAME = "propose_mandate_profiles"
-_PROPOSAL_ID_RE = re.compile(r'"proposal_id"\s*:\s*"(mp_[0-9a-zA-Z]+)"')
+_PROPOSAL_ID_RE = re.compile(r'"proposal_id"\s*:\s*"(mp_[0-9a-f]{32})"')
 
 
 def _load_full_proposal(proposal_id: str) -> Optional[Dict[str, Any]]:
@@ -2741,6 +2741,7 @@ def cmd_provider_login(provider: str) -> int:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_LIVE_BROKER = "robinhood"
+_LIVE_AUTHORIZE_INIT_TIMEOUT_SECONDS = 300.0
 
 
 def _live_api_base() -> str:
@@ -2844,6 +2845,14 @@ def cmd_live_authorize(broker: str) -> int:
     try:
         from src.tools.mcp import build_mcp_tool_wrappers
 
+        configured_init_timeout = getattr(server_config, "init_timeout", None)
+        if (
+            configured_init_timeout is None
+            or float(configured_init_timeout) < _LIVE_AUTHORIZE_INIT_TIMEOUT_SECONDS
+        ) and hasattr(server_config, "model_copy"):
+            server_config = server_config.model_copy(
+                update={"init_timeout": _LIVE_AUTHORIZE_INIT_TIMEOUT_SECONDS}
+            )
         tools = build_mcp_tool_wrappers(key, server_config)
     except Exception as exc:  # noqa: BLE001 — surface any handshake failure
         console.print(f"[red]Authorization failed:[/red] {exc}")
@@ -3974,7 +3983,7 @@ def _build_parser() -> argparse.ArgumentParser:
     connector_subparsers.add_parser("list", help="List selectable connector profiles")
 
     connector_use = connector_subparsers.add_parser("use", help="Select the default connector profile")
-    connector_use.add_argument("profile", help="Profile id, e.g. ibkr-paper-local")
+    connector_use.add_argument("profile", help="Profile id, e.g. robinhood-live")
 
     def _add_connector_profile_arg(p: argparse.ArgumentParser, *, required: bool = False) -> None:
         if required:
@@ -4035,8 +4044,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_connector_profile_arg(connector_history)
     _add_connector_local(connector_history)
     _add_connector_contract(connector_history)
-    connector_history.add_argument("--duration", default="30 D", help="IBKR (local_tws) duration string")
-    connector_history.add_argument("--bar-size", dest="bar_size", default="1 day", help="IBKR (local_tws) bar size")
+    connector_history.add_argument("--duration", default="30 D", help="Trading duration string, e.g. '30 D'")
+    connector_history.add_argument("--bar-size", dest="bar_size", default="1 day", help="Trading bar size, e.g. '1 day'")
     connector_history.add_argument("--what-to-show", dest="what_to_show", default="TRADES")
     connector_history.add_argument("--no-rth", action="store_true", help="Include outside-regular-hours data when available")
     connector_history.add_argument("--period", default="1d", help="Bar interval for SDK connectors: 1m/5m/15m/30m/1h/4h/1d/1w/1M")

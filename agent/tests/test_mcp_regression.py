@@ -219,7 +219,7 @@ def test_trading_mcp_wrappers_forward_explicit_local_overrides(monkeypatch: pyte
     monkeypatch.setattr(mod, "_get_registry", lambda: registry)
 
     mod.trading_account(
-        connection="ibkr-paper-local",
+        connection="robinhood-live-mcp",
         host="localhost",
         port=4002,
         client_id=123,
@@ -231,7 +231,7 @@ def test_trading_mcp_wrappers_forward_explicit_local_overrides(monkeypatch: pyte
         (
             "trading_account",
             {
-                "connection": "ibkr-paper-local",
+                "connection": "robinhood-live-mcp",
                 "host": "localhost",
                 "port": 4002,
                 "client_id": 123,

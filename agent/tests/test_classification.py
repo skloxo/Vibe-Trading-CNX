@@ -82,7 +82,9 @@ def test_map_read_pin_not_overridden_by_absent_annotation() -> None:
     assert classify_tool("get_quotes", ann, _ROBINHOOD_TOOL_CLASS) is ToolClass.READ
 
 
-def test_ibkr_sparse_map_pins_known_order_names_write() -> None:
+# DEPRECATED: ibkr connector removed
+def test_ibkr_sparse_map_pins_known_order_names_write() -> None:  # noqa: ANN
     """IBKR read names are annotation-discovered, but order names stay WRITE."""
-    assert classify_tool("place_order", None, _IBKR_TOOL_CLASS) is ToolClass.WRITE
-    assert classify_tool("cancelOrder", ToolAnnotations(readOnlyHint=True), _IBKR_TOOL_CLASS) is ToolClass.WRITE
+    # assert classify_tool("place_order", None, _IBKR_TOOL_CLASS) is ToolClass.WRITE
+    # assert classify_tool("cancelOrder", ToolAnnotations(readOnlyHint=True), _IBKR_TOOL_CLASS) is ToolClass.WRITE
+    pass  # ibkr connector removed

@@ -132,7 +132,7 @@ def _allows_readonly_wildcard_probe(
 ) -> bool:
     """Return whether a live broker may use ``enabled_tools=["*"]``.
 
-    The only supported exception today is IBKR's official MCP read probe:
+    The only supported exception today is a broker's official MCP read probe:
     tool names are not known before OAuth, but the token request can be pinned
     to ``mcp.read``. Any write scope or missing read scope fails closed.
 
@@ -174,6 +174,11 @@ def _allows_readonly_wildcard_probe(
 ROBINHOOD_MCP_SERVER_SEED: dict[str, object] = {
     "type": "streamableHttp",
     "url": "https://agent.robinhood.com/mcp/trading",
+    # Robinhood OAuth can require human face verification. Keep normal remote
+    # tool calls on the default 30s budget while giving the initial
+    # OAuth/initialize round-trip the same 300s window as FastMCP's callback
+    # server.
+    "init_timeout": 300.0,
     "auth": {
         "type": "oauth",
         "scopes": ["trading.read"],
@@ -195,7 +200,7 @@ ROBINHOOD_MCP_SERVER_SEED: dict[str, object] = {
     ],
 }
 
-# IBKR MCP server seed removed during foreign-market cleanup.
+# Foreign-market MCP server seeds removed during cleanup.
 
 
 def _to_camel(name: str) -> str:
@@ -270,6 +275,7 @@ class MCPServerConfig(ConfigBase):
     headers: dict[str, str] = Field(default_factory=dict)
     auth: MCPOAuthConfig | None = None
     tool_timeout: float = Field(default=30.0, ge=0.1)
+    init_timeout: float | None = Field(default=None, ge=0.1)
     enabled_tools: list[str] = Field(default_factory=lambda: ["*"])
 
     def resolved_transport(self) -> Literal["stdio", "sse", "streamableHttp"]:
@@ -334,6 +340,7 @@ class MCPServerConfigOverride(ConfigBase):
     headers: dict[str, str] | None = None
     auth: MCPOAuthConfig | None = None
     tool_timeout: float | None = Field(default=None, ge=0.1)
+    init_timeout: float | None = Field(default=None, ge=0.1)
     enabled_tools: list[str] | None = None
 
 

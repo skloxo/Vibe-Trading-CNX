@@ -70,8 +70,8 @@ def get_history(
 ) -> dict[str, Any]:
     """Read historical bars for a connector profile.
 
-    ``duration``/``bar_size``/``what_to_show``/``use_rth`` are the IBKR
-    (``local_tws``) vocabulary. ``period`` (e.g. ``1m``/``5m``/``1h``/``1d``)
+    ``duration``/``bar_size``/``what_to_show``/``use_rth`` are the connector
+    vocabulary (e.g. a ``local_tws`` broker adapter). ``period`` (e.g. ``1m``/``5m``/``1h``/``1d``)
     and ``limit`` are the generic vocabulary every ``broker_sdk`` connector
     understands and maps to its own SDK tokens.
     """

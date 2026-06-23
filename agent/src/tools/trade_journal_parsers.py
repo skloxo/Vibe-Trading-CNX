@@ -1,7 +1,7 @@
 """Trade journal format adapters.
 
 Each parser normalizes one broker export format into a list of TradeRecord.
-Supported: Tonghuashun (同花顺), Eastmoney (东方财富), Futu (富途), generic CSV.
+Supported: Tonghuashun (同花顺), Eastmoney (东方财富), generic CSV.
 
 Encoding fallback order for CSV: utf-8 → utf-8-sig → gbk → gb2312.
 Excel (.xlsx/.xls) always opens as utf-8 internally via openpyxl/xlrd.
@@ -15,7 +15,7 @@ from typing import Any
 
 import pandas as pd
 
-FormatName = str  # "tonghuashun" | "eastmoney" | "futu" | "generic" | "unknown"
+FormatName = str  # "tonghuashun" | "eastmoney" | "generic" | "unknown"  # [REMOVED: futu — connector deleted]
 
 _A_SHARE_EXCHANGE_MAP = {
     # prefix → suffix; Shanghai Main + STAR, Shenzhen Main + SME + ChiNext, BSE
@@ -107,8 +107,9 @@ def detect_format(df: pd.DataFrame) -> FormatName:
         return "tonghuashun"
     if {"买卖标志", "股票代码"}.issubset(cols) or {"买卖标志", "成交均价"}.issubset(cols):
         return "eastmoney"
-    if {"Date", "Symbol", "Side"}.issubset(cols) or {"Date", "Symbol", "Direction"}.issubset(cols):
-        return "futu"
+    # [REMOVED: Futu format detection — connector deleted 2026-06]
+    # if {"Date", "Symbol", "Side"}.issubset(cols) or {"Date", "Symbol", "Direction"}.issubset(cols):
+    #     return "futu"
 
     # Generic: any subset containing time/symbol/side hints
     lowered = {c.lower() for c in cols}
@@ -211,46 +212,47 @@ def parse_eastmoney(df: pd.DataFrame) -> list[TradeRecord]:
     return records
 
 
-def _futu_market(symbol: str, market_hint: str) -> str:
-    """Infer market from symbol/market column."""
-    hint = market_hint.strip().lower()
-    if hint in {"hk", "us", "cn"}:
-        return {"hk": "hk", "us": "us", "cn": "china_a"}[hint]
-    if symbol.endswith(".HK"):
-        return "hk"
-    if symbol.isalpha() or "." not in symbol:
-        return "us"
-    return "other"
-
-
-def parse_futu(df: pd.DataFrame) -> list[TradeRecord]:
-    """Parse 富途 exports (English headers, HK+US mix).
-
-    Expected columns: Date, Time, Symbol, Name, Side, Quantity, Price,
-    Amount, Commission, Platform Fee, Market (optional).
-    """
-    records: list[TradeRecord] = []
-    for _, row in df.iterrows():
-        date = str(row.get("Date", "")).strip()
-        time = str(row.get("Time", "")).strip()
-        dt = f"{date} {time}".strip()
-        symbol = str(row.get("Symbol", "")).strip().upper()
-        qty = _to_float(row.get("Quantity"))
-        price = _to_float(row.get("Price"))
-        amount = _to_float(row.get("Amount")) or qty * price
-        fee = _to_float(row.get("Commission")) + _to_float(row.get("Platform Fee"))
-        records.append(TradeRecord(
-            datetime=dt,
-            symbol=symbol,
-            name=str(row.get("Name", "")).strip(),
-            side=_normalize_side(row.get("Side") if "Side" in df.columns else row.get("Direction")),
-            quantity=qty,
-            price=price,
-            amount=amount,
-            fee=fee,
-            market=_futu_market(symbol, str(row.get("Market", ""))),
-        ))
-    return records
+# [REMOVED: Futu parser — connector deleted 2026-06]
+# def _futu_market(symbol: str, market_hint: str) -> str:
+#     """Infer market from symbol/market column."""
+#     hint = market_hint.strip().lower()
+#     if hint in {"hk", "us", "cn"}:
+#         return {"hk": "hk", "us": "us", "cn": "china_a"}[hint]
+#     if symbol.endswith(".HK"):
+#         return "hk"
+#     if symbol.isalpha() or "." not in symbol:
+#         return "us"
+#     return "other"
+#
+#
+# def parse_futu(df: pd.DataFrame) -> list[TradeRecord]:
+#     """Parse 富途 exports (English headers, HK+US mix).
+#
+#     Expected columns: Date, Time, Symbol, Name, Side, Quantity, Price,
+#     Amount, Commission, Platform Fee, Market (optional).
+#     """
+#     records: list[TradeRecord] = []
+#     for _, row in df.iterrows():
+#         date = str(row.get("Date", "")).strip()
+#         time = str(row.get("Time", "")).strip()
+#         dt = f"{date} {time}".strip()
+#         symbol = str(row.get("Symbol", "")).strip().upper()
+#         qty = _to_float(row.get("Quantity"))
+#         price = _to_float(row.get("Price"))
+#         amount = _to_float(row.get("Amount")) or qty * price
+#         fee = _to_float(row.get("Commission")) + _to_float(row.get("Platform Fee"))
+#         records.append(TradeRecord(
+#             datetime=dt,
+#             symbol=symbol,
+#             name=str(row.get("Name", "")).strip(),
+#             side=_normalize_side(row.get("Side") if "Side" in df.columns else row.get("Direction")),
+#             quantity=qty,
+#             price=price,
+#             amount=amount,
+#             fee=fee,
+#             market=_futu_market(symbol, str(row.get("Market", ""))),
+#         ))
+#     return records
 
 
 def parse_generic(df: pd.DataFrame) -> list[TradeRecord]:
@@ -326,7 +328,7 @@ def _infer_market_from_symbol(symbol: str) -> str:
 _PARSERS = {
     "tonghuashun": parse_tonghuashun,
     "eastmoney": parse_eastmoney,
-    "futu": parse_futu,
+    # [REMOVED: "futu": parse_futu — connector deleted 2026-06]
     "generic": parse_generic,
 }
 

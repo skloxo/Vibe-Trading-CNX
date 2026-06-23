@@ -13,17 +13,18 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ROWS = 250
 
+# Symbol -> preferred source. The matched source is the head of its market's
+# fallback chain (registry.FALLBACK_CHAINS), so an unavailable preferred source
+# still degrades gracefully to the rest of the chain. A-shares route to the
+# Tencent quote endpoint first (lighter, throttle-tolerant).
 _SOURCE_PATTERNS = [
-    (re.compile(r"^\d{6}\.(SZ|SH|BJ)$", re.I), "baostock"),
+    (re.compile(r"^local:", re.I), "local"),
+    (re.compile(r"^\d{6}\.(SZ|SH|BJ)$", re.I), "tencent"),
 ]
 
 
 def detect_source(code: str) -> str:
-    """Infer the best loader source for a normalized symbol.
-
-    Only A-share patterns are recognized (SZ/SH/BJ suffix).
-    All other codes default to ``tushare``.
-    """
+    """Infer the best loader source for a normalized symbol."""
     for pattern, source in _SOURCE_PATTERNS:
         if pattern.match(code):
             return source

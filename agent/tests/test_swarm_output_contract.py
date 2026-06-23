@@ -43,11 +43,11 @@ PLAN_STUB = (
     "First, I'll load the necessary skills."
 )
 REAL_REPORT = (
-    "# BTC-USDT — Short-Term View\n\n"
-    "Spot fetched via okx: 81,704.6 (2026-05-05). 7d range 77,750–82,842.\n\n"
-    "**Recommendation: accumulate on dips to 79k; invalidation below 77.5k.**\n"
-    "Position 3% NAV, stop 76,900, target 86,000. Funding 0.035%/8h is elevated\n"
-    "but not extreme; on-chain exchange reserves declining (bullish)."
+    "# 000001.SZ — Short-Term View\n\n"
+    "Spot fetched via tencent: 12.35 (2026-05-05). 7d range 11.80–12.60.\n\n"
+    "**Recommendation: accumulate on dips to 12.00; invalidation below 11.70.**\n"
+    "Position 3% NAV, stop 11.60, target 13.20. Volume elevated but not extreme;"
+    " northbound capital inflows declining (bearish)."
 )
 
 

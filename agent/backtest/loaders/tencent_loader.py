@@ -56,7 +56,15 @@ class DataLoader:
         result: Dict[str, pd.DataFrame] = {}
         for code in codes:
             try:
-                df = self._fetch_one(code, start_date, end_date)
+                df = cached_loader_fetch(
+                    source=self.name,
+                    symbol=code,
+                    timeframe=interval,
+                    start_date=start_date,
+                    end_date=end_date,
+                    fields=None,
+                    fetch=lambda code=code: self._fetch_one(code, start_date, end_date),
+                )
                 if df is not None and not df.empty:
                     result[code] = df
             except Exception as exc:

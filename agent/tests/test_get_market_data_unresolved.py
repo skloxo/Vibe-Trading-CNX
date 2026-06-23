@@ -57,7 +57,7 @@ def good_only(monkeypatch):
 
 
 def _call(codes):
-    return json.loads(_gmd(codes=codes, start_date="2026-05-01", end_date="2026-05-02", source="yfinance"))
+    return json.loads(_gmd(codes=codes, start_date="2026-05-01", end_date="2026-05-02", source="akshare"))
 
 
 def test_unresolved_symbol_is_surfaced(good_only):

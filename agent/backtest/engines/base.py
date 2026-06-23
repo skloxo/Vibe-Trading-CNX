@@ -20,6 +20,12 @@ from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
+from backtest.loaders.rsshub_events import (
+    FeedSpec,
+    RSSHubEventProvider,
+    enrich_price_frames_with_events,
+    feed_specs_from_config,
+)
 from backtest.loaders.tushare_fundamentals import (
     TushareFundamentalProvider,
     enrich_price_frames_with_fundamentals,
@@ -202,6 +208,47 @@ def _maybe_enrich_fundamentals(
         ) from exc
 
 
+def _event_feed_specs(config: Dict[str, Any]) -> List[FeedSpec]:
+    """Parse the optional ``event_feeds`` feed definitions from backtest config.
+
+    ``event_feeds`` is a list of feed-definition dicts (there is no built-in
+    catalogue) — each with ``name``/``route_template``/``event_type`` and an
+    optional ``code_style``. An empty/absent value means "no event enrichment".
+    """
+    raw_feeds = config.get("event_feeds")
+    if raw_feeds in (None, [], {}):
+        return []
+    if not isinstance(raw_feeds, (list, tuple)):
+        raise ValueError("event_feeds must be a list of feed definitions")
+    return feed_specs_from_config(raw_feeds)
+
+
+def _maybe_enrich_events(
+    data_map: Dict[str, pd.DataFrame],
+    config: Dict[str, Any],
+) -> Dict[str, pd.DataFrame]:
+    """Attach a point-in-time-safe ``event_score`` column before signal generation."""
+    specs = _event_feed_specs(config)
+    if not specs:
+        return data_map
+
+    try:
+        provider = RSSHubEventProvider(feeds=specs)
+        if not provider.is_available():
+            raise RuntimeError(f"RSSHub base URL not configured (set ${'RSSHUB_BASE_URL'})")
+        return enrich_price_frames_with_events(
+            data_map,
+            provider,
+            as_of=config.get("end_date", ""),
+            decay_lambda=float(config.get("event_decay_lambda", 0.1)),
+            lookback=int(config.get("event_lookback", 30)),
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"event_feeds requested but RSSHub enrichment failed: {exc}"
+        ) from exc
+
+
 # ─── Base Engine ───
 
 
@@ -348,6 +395,7 @@ class BaseEngine(ABC):
             print(json.dumps({"error": "No data fetched"}))
             sys.exit(1)
         data_map = _maybe_enrich_fundamentals(data_map, config)
+        data_map = _maybe_enrich_events(data_map, config)
 
         # 2. Generate signals
         signal_map = signal_engine.generate(data_map)
@@ -396,7 +444,7 @@ class BaseEngine(ABC):
             from backtest.benchmark import resolve_benchmark
             bench_result = resolve_benchmark(
                 strategy_codes=codes,
-                source=config.get("source", "yfinance"),
+                source=config.get("source", "tushare"),
                 start_date=config.get("start_date", ""),
                 end_date=config.get("end_date", ""),
                 interval=interval,

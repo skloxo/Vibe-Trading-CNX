@@ -36,6 +36,10 @@ const METRIC_LABELS_ZH: Record<string, string> = {
   information_ratio: "IR",
 };
 
+// Canonical metric key set (English labels). Kept exported so consumers and
+// tests have a stable label map; localized lookups go through getMetricLabel.
+export const METRIC_LABELS = METRIC_LABELS_EN;
+
 export function getMetricLabel(k: string): string {
   const lang = i18n.language;
   if (lang.startsWith('zh')) return METRIC_LABELS_ZH[k] || METRIC_LABELS_EN[k] || k;

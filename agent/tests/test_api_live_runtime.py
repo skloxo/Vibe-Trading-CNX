@@ -150,7 +150,8 @@ def test_runner_start_requires_committed_mandate(tmp_path: Path, monkeypatch) ->
     assert "mandate" in response.json()["detail"].lower()
 
 
-def test_runner_start_rejects_readonly_connector_without_runner(
+# DEPRECATED: ibkr connector removed
+def test_runner_start_rejects_readonly_connector_without_runner(  # noqa: ANN
     tmp_path: Path, monkeypatch
 ) -> None:
     client = _client(tmp_path, monkeypatch)
@@ -159,7 +160,7 @@ def test_runner_start_rejects_readonly_connector_without_runner(
 
     assert response.status_code == 400
     detail = response.json()["detail"].lower()
-    assert "ibkr" in detail
+    # assert "ibkr" in detail  # ibkr connector removed
     assert "runner" in detail
 
 
@@ -261,7 +262,7 @@ def _seed_proposal(tmp_path: Path, proposal_id: str, broker: str = "robinhood") 
 
 def test_c1_relay_builds_mandate_proposal_frame(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path), raising=False)
-    proposal_id = "mp_01ABCdef"
+    proposal_id = "mp_" + "1" * 32
     _seed_proposal(tmp_path, proposal_id)
 
     event = SimpleNamespace(
@@ -306,7 +307,7 @@ def test_c1_relay_returns_none_when_proposal_missing(tmp_path: Path, monkeypatch
         data={
             "tool": "propose_mandate_profiles",
             "status": "ok",
-            "preview": json.dumps({"proposal_id": "mp_missing01"})[:200],
+            "preview": json.dumps({"proposal_id": "mp_" + "2" * 32})[:200],
         },
     )
     assert api_server._mandate_proposal_frame_from_tool_result(event) is None

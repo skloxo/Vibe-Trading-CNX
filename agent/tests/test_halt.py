@@ -51,7 +51,7 @@ def test_per_broker_trip_is_scoped(live_runtime: Path) -> None:
     halt.trip_halt(by="frontend", reason="halt one broker", broker="robinhood")
     assert halt.halt_flag_set("robinhood") is True
     # A different broker is unaffected, and the global check stays clear.
-    assert halt.halt_flag_set("alpaca") is False
+    assert halt.halt_flag_set("test-broker") is False
     assert halt.halt_flag_set() is False
     # Clearing the broker sentinel does not require touching the global one.
     assert halt.clear_halt(broker="robinhood") is True
@@ -125,7 +125,7 @@ def test_broker_action_overrides_global(live_runtime: Path) -> None:
     halt.register_halt_action(lambda broker: "global")
     halt.register_halt_action(lambda broker: "rh", broker="robinhood")
     assert halt.on_halt_action("robinhood") == "rh"
-    assert halt.on_halt_action("alpaca") == "global"
+    assert halt.on_halt_action("test-broker") == "global"
 
 
 def test_unregister_halt_action(live_runtime: Path) -> None:

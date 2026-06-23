@@ -15,15 +15,15 @@ from backtest.models import TradeRecord
 # ─── Annualisation factor mapping ───
 
 # Annualisation table for supported data sources.
-_TRADING_DAYS = {"tushare": 252, "okx": 365, "akshare": 252, "mootdx": 252}
+_TRADING_DAYS = {"tushare": 252, "akshare": 252, "mootdx": 252}
 _BARS_PER_DAY = {
-    "1m":  {"tushare": 240, "okx": 1440, "akshare": 240, "mootdx": 240},
-    "5m":  {"tushare": 48,  "okx": 288,  "akshare": 48,  "mootdx": 48},
-    "15m": {"tushare": 16,  "okx": 96,   "akshare": 16,  "mootdx": 16},
-    "30m": {"tushare": 8,   "okx": 48,   "akshare": 8,   "mootdx": 8},
-    "1H":  {"tushare": 4,   "okx": 24,   "akshare": 4,   "mootdx": 4},
-    "4H":  {"tushare": 1,   "okx": 6,    "akshare": 1,   "mootdx": 1},
-    "1D":  {"tushare": 1,   "okx": 1,    "akshare": 1,   "mootdx": 1},
+    "1m":  {"tushare": 240, "akshare": 240, "mootdx": 240},
+    "5m":  {"tushare": 48,  "akshare": 48,  "mootdx": 48},
+    "15m": {"tushare": 16,  "akshare": 16,  "mootdx": 16},
+    "30m": {"tushare": 8,   "akshare": 8,   "mootdx": 8},
+    "1H":  {"tushare": 4,   "akshare": 4,   "mootdx": 4},
+    "4H":  {"tushare": 1,   "akshare": 1,   "mootdx": 1},
+    "1D":  {"tushare": 1,   "akshare": 1,   "mootdx": 1},
 }
 
 
@@ -32,7 +32,7 @@ def calc_bars_per_year(interval: str = "1D", source: str = "tushare") -> int:
 
     Args:
         interval: Bar size (1m / 5m / 15m / 30m / 1H / 4H / 1D).
-        source: Data source (tushare / okx / akshare / mootdx).
+        source: Data source (tushare / akshare / mootdx).
 
     Returns:
         Bars per year.
