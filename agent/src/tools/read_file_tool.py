@@ -71,6 +71,7 @@ class ReadFileTool(BaseTool):
             paths_to_try.append(file_path[len("skills/") :])
 
         resolved = None
+        expanded_candidate = Path(file_path).expanduser().resolve()
         for root in allowed_roots:
             for p in paths_to_try:
                 try:
@@ -79,7 +80,11 @@ class ReadFileTool(BaseTool):
                         resolved = candidate
                         break
                 except ValueError:
-                    continue
+                    pass
+                # _safe_path doesn't expand tildes; try expanded path directly
+                if expanded_candidate.is_absolute() and expanded_candidate.is_relative_to(root) and expanded_candidate.exists():
+                    resolved = expanded_candidate
+                    break
             if resolved:
                 break
 
