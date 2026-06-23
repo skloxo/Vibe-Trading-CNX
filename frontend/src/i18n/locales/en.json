@@ -322,7 +322,9 @@
     "haltConnectorTitle": "Instantly halt connector runtime activity",
     "haltConnector": "Halt connector runtime",
     "moreOptions": "More options",
-    "uploadPdf": "Upload PDF document"
+    "uploadPdf": "Upload PDF document",
+    "researchGoal": "Research Goal",
+    "agentSwarm": "Agent Swarm"
   },
   "runDetail": {
     "title": "Run Detail",
@@ -491,7 +493,35 @@
     "icSampleCount": "IC sample count",
     "alpha": "Alpha",
     "alphaComparisonRanking": "Alpha comparison ranking",
-    "skippedPre": "Skipped:"
+    "skippedPre": "Skipped:",
+    "zooCardTitle": {
+      "qlib158": "Qlib 158",
+      "alpha101": "Kakushadze 101 Formulaic Alphas",
+      "gtja191": "GTJA 191",
+      "academic": "Academic Anomalies"
+    },
+    "zooCardDesc": {
+      "qlib158": "Microsoft Qlib's full 158-feature library covering momentum, volatility, volume and rolling statistical signals.",
+      "alpha101": "The 101 formulaic alphas from Kakushadze (2015); short-horizon cross-sectional signals.",
+      "gtja191": "Guotai Junan Securities' 191 alphas; technical and microstructure signals tuned to China A-share markets.",
+      "academic": "Curated long-horizon anomalies from the academic literature (value, momentum, quality, low-vol, etc.)."
+    },
+    "universeOption": {
+      "csi300": "CSI 300 (China A)",
+      "sp500": "S&P 500 (US)",
+      "btc-usdt": "BTC-USDT (Crypto)"
+    },
+    "compareTooltip": "Tick 2+ alphas below, then compare them head-to-head",
+    "loadingAlpha": "Loading {{id}}…",
+    "comparedRankedBy": "{{count}} compared · ranked by {{sort}} · {{universe}} · {{period}}",
+    "skippedCount": "{{count}} skipped",
+    "gapTitle": "Gap to the leader on {{sort}}",
+    "sortOption": {
+      "ir": "IR (information ratio)",
+      "icMean": "IC mean",
+      "icPositiveRatio": "IC > 0 ratio",
+      "icCount": "Sample count"
+    }
   },
   "validation": {
     "noData": "No validation data available.",

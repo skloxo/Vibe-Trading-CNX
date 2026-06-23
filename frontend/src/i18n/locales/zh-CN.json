@@ -12,7 +12,7 @@
     "agent": "智能体",
     "runtime": "运行时",
     "reports": "报告",
-    "alphaZoo": "Alpha 动物园",
+    "alphaZoo": "Alpha 因子库",
     "settings": "设置",
     "correlation": "相关性矩阵",
     "sessions": "会话",
@@ -322,7 +322,9 @@
     "haltConnectorTitle": "立即停止连接器运行时活动",
     "haltConnector": "停止连接器运行时",
     "moreOptions": "更多选项",
-    "uploadPdf": "上传 PDF 文档"
+    "uploadPdf": "上传 PDF 文档",
+    "researchGoal": "研究目标",
+    "agentSwarm": "智能体蜂群"
   },
   "runDetail": {
     "title": "运行详情",
