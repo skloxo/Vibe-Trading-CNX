@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/a-share-data-sources]
   pull_request:
-    branches: [main]
+    branches: [main, feat/a-share-data-sources]
 
 jobs:
   test:
