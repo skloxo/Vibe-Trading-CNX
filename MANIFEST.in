@@ -1,10 +1,6 @@
 include LICENSE
 include NOTICE
 include README.md
-include README_zh.md
-include README_ja.md
-include README_ko.md
-include README_ar.md
 include pyproject.toml
 include Dockerfile
 include docker-compose.yml
