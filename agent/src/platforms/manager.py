@@ -52,6 +52,22 @@ class PlatformManager:
                 logger.error("[PlatformManager] Received message for unregistered platform: %s", incoming.platform)
                 return
 
+            # Check for reset/new session command
+            cmd = incoming.content.lower().strip()
+            if cmd in ("/new", "new", "/reset", "reset", "新建会话", "重置会话"):
+                logger.info(
+                    "[PlatformManager] Reset session command received for %s (chat: %s)",
+                    incoming.platform, incoming.chat_id
+                )
+                await self._unbind_existing_sessions(incoming)
+                
+                # Send confirmation text back
+                await adapter.send_message(
+                    chat_id=incoming.chat_id,
+                    content="🎉 **已成功重置会话！**\n我已为您开启了一个全新的量化投研沙箱，之前的历史会话已封存归档。您可以随时发送您的问题以开始新的一轮分析。"
+                )
+                return
+
             # 1. Resolve Session ID (or create one)
             session_id = await self._resolve_or_create_session(incoming)
 
@@ -258,3 +274,33 @@ class PlatformManager:
                 await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
         finally:
             self._running_trackers.pop(session_id, None)
+
+    async def _unbind_existing_sessions(self, incoming: IncomingMessage) -> None:
+        """Find all sessions mapped to incoming chat_id and remove platform config mapping."""
+        loop = asyncio.get_running_loop()
+        
+        # Load sessions from store
+        sessions = await loop.run_in_executor(
+            None,
+            lambda: self.session_service.store.list_sessions(limit=200)
+        )
+
+        for session in sessions:
+            config = session.config or {}
+            if (
+                config.get("platform") == incoming.platform 
+                and config.get("platform_chat_id") == incoming.chat_id
+            ):
+                new_config = dict(config)
+                # Archive the keys to unbind them from current routing
+                if "platform" in new_config:
+                    new_config["archived_platform"] = new_config.pop("platform")
+                if "platform_chat_id" in new_config:
+                    new_config["archived_platform_chat_id"] = new_config.pop("platform_chat_id")
+                
+                session.config = new_config
+                # Update session config in store
+                await loop.run_in_executor(
+                    None,
+                    lambda s=session: self.session_service.store.update_session(s)
+                )
