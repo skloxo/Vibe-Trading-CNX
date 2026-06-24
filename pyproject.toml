@@ -1,7 +1,7 @@
 [project]
 name = "vibe-trading-ai"
 version = "0.1.10"
-description = "Natural-language finance research AI agent with backtesting"
+description = "A-Share & HK Equities Focus Quantitative Trading Workstation powered by Multi-Agent Swarms"
 requires-python = ">=3.11"
 license = "MIT"
 readme = "README.md"
