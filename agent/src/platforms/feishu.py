@@ -32,6 +32,35 @@ def _ensure_lark_imports():
     from lark_oapi.event.dispatcher_handler import EventDispatcherHandler
     lark = lark_oapi
 
+    # Monkey patch lark-oapi's ws client loop to be thread-local event loop proxy
+    import lark_oapi.ws.client
+    import asyncio
+
+    class LoopProxy:
+        def __getattr__(self, name):
+            try:
+                return getattr(asyncio.get_event_loop(), name)
+            except RuntimeError:
+                # If no loop in this thread, automatically create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                return getattr(loop, name)
+            
+        def __str__(self):
+            try:
+                return str(asyncio.get_event_loop())
+            except RuntimeError:
+                return "No running event loop"
+            
+        def __repr__(self):
+            try:
+                return repr(asyncio.get_event_loop())
+            except RuntimeError:
+                return "<No running event loop>"
+
+    lark_oapi.ws.client.loop = LoopProxy()
+    logger.info("[Feishu] Applied thread-local event loop proxy patch to lark-oapi ws client.")
+
 
 class FeishuAdapter(BasePlatformAdapter):
     """Feishu/Lark messenger platform adapter using official lark-oapi WebSocket client."""
