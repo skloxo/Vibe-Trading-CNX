@@ -54,7 +54,7 @@ class FeishuAdapter(BasePlatformAdapter):
         
         self._client: Optional[Any] = None
         self._ws_client: Optional[Any] = None
-        self._ws_task: Optional[asyncio.Task] = None
+        self._ws_thread: Optional[threading.Thread] = None
         self._manager: Optional[Any] = None
         
         # Throttled card update states
@@ -102,19 +102,24 @@ class FeishuAdapter(BasePlatformAdapter):
         self._is_running = True
         self._card_updater_task = asyncio.create_task(self._card_flush_loop())
         
-        # Start WebSocket Client in a background task
-        self._ws_task = asyncio.create_task(self._run_ws_client())
-        logger.info(f"[Feishu] WebSocket adapter initialized and started in background for channel: {self._name}")
+        # Start WebSocket Client in a dedicated background thread with isolated event loop
+        self._ws_thread = threading.Thread(
+            target=self._run_ws_client_thread,
+            name=f"feishu-ws-{self._channel_id}",
+            daemon=True
+        )
+        self._ws_thread.start()
+        logger.info(f"[Feishu] WebSocket adapter initialized and started in dedicated thread for channel: {self._name}")
 
-    async def _run_ws_client(self) -> None:
+    def _run_ws_client_thread(self) -> None:
         try:
-            # lark-oapi WS client's start() is blocking. Run in executor.
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._ws_client.start)
-        except asyncio.CancelledError:
-            logger.info("[Feishu] WebSocket client task cancelled.")
+            # Create a brand new event loop for this background thread
+            # to isolate it from the main uvloop used by FastAPI
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self._ws_client.start()
         except Exception as e:
-            logger.exception("[Feishu] Error running WebSocket client: %s", e)
+            logger.exception("[Feishu] Error running WebSocket client in thread: %s", e)
 
     def _on_message_received(self, data: Any) -> None:
         """Invoked by lark-oapi on a background thread when a new message arrives."""
@@ -351,6 +356,16 @@ class FeishuAdapter(BasePlatformAdapter):
         }
         return json.dumps(card, ensure_ascii=False)
 
+    def _stop_ws_client_thread(self) -> None:
+        try:
+            # Create a separate loop to shutdown client blockingly
+            # without interfering with main FastAPI uvloop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self._ws_client.stop()
+        except Exception as e:
+            logger.exception("[Feishu] Error stopping WebSocket client in thread: %s", e)
+
     async def close(self) -> None:
         self._is_running = False
         if self._card_updater_task:
@@ -361,17 +376,17 @@ class FeishuAdapter(BasePlatformAdapter):
                 pass
         
         if self._ws_client:
-            # Stop the lark WS client connection
             logger.info("[Feishu] Shutting down Feishu WebSocket client...")
             try:
-                self._ws_client.stop()
+                stop_thread = threading.Thread(
+                    target=self._stop_ws_client_thread,
+                    name=f"feishu-ws-stop-{self._channel_id}",
+                    daemon=True
+                )
+                stop_thread.start()
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, stop_thread.join)
             except Exception as e:
                 logger.warning("[Feishu] Error stopping WebSocket client: %s", e)
                 
-        if self._ws_task:
-            self._ws_task.cancel()
-            try:
-                await self._ws_task
-            except asyncio.CancelledError:
-                pass
         logger.info("[Feishu] WebSocket adapter shut down.")
