@@ -112,22 +112,28 @@ class FeishuAdapter(BasePlatformAdapter):
         logger.info(f"[Feishu] WebSocket adapter initialized and started in dedicated thread for channel: {self._name}")
 
     def _run_ws_client_thread(self) -> None:
+        print(f"[Feishu WS Thread] Thread started for channel '{self._name}' ({self._channel_id}). Isolating event loop...", flush=True)
         try:
             # Create a brand new event loop for this background thread
             # to isolate it from the main uvloop used by FastAPI
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            print(f"[Feishu WS Thread] Calling ws_client.start() blockingly...", flush=True)
             self._ws_client.start()
+            print(f"[Feishu WS Thread] ws_client.start() returned successfully.", flush=True)
         except Exception as e:
+            print(f"[Feishu WS Thread] ERROR: Failed to run WebSocket client: {e}", flush=True)
             logger.exception("[Feishu] Error running WebSocket client in thread: %s", e)
 
     def _on_message_received(self, data: Any) -> None:
         """Invoked by lark-oapi on a background thread when a new message arrives."""
+        print(f"[Feishu WS Event] Raw message event received from Feishu Gateway!", flush=True)
         try:
             event = getattr(data, "event", None)
             message = getattr(event, "message", None)
             sender = getattr(event, "sender", None)
             if not message or not sender:
+                print(f"[Feishu WS Event] Warning: Missing message or sender in event data.", flush=True)
                 return
 
             message_id = getattr(message, "message_id", "")
@@ -138,6 +144,7 @@ class FeishuAdapter(BasePlatformAdapter):
             sender_open_id = getattr(sender_id, "open_id", "") if sender_id else ""
 
             if not message_id or not chat_id or not sender_open_id:
+                print(f"[Feishu WS Event] Warning: Missing message_id, chat_id, or sender_open_id in event.", flush=True)
                 return
 
             # Parse message content first (needed for both public commands and authorized checks)
@@ -149,11 +156,15 @@ class FeishuAdapter(BasePlatformAdapter):
                 except Exception:
                     text_content = raw_content.strip()
             else:
+                print(f"[Feishu WS Event] Warning: Ignored non-text message type: {message_type}", flush=True)
                 # Skip non-text messages for now
                 return
 
+            print(f"[Feishu WS Event] Received text: '{text_content}' from user {sender_open_id} in chat {chat_id}", flush=True)
+
             # Feature: Help users fetch their OpenID directly from the Bot
             if text_content.lower() in ("/myid", "/id", "myid", "id", "我的id", "我的openid", "我的id是什么", "获取id"):
+                print(f"[Feishu WS Event] ID command detected! Sending OpenID back to user...", flush=True)
                 asyncio.run_coroutine_threadsafe(
                     self.send_message(chat_id, f"您的飞书 OpenID 是:\n`{sender_open_id}`"),
                     asyncio.get_event_loop()
@@ -162,6 +173,7 @@ class FeishuAdapter(BasePlatformAdapter):
 
             # Check authorization
             if not self._allow_all_users and self._allowed_users and sender_open_id not in self._allowed_users:
+                print(f"[Feishu WS Event] User {sender_open_id} is unauthorized. Allowed: {self._allowed_users}. Replying with block message...", flush=True)
                 logger.warning("[Feishu] Unauthorized user %s tried to send message: %s", sender_open_id, message_id)
                 # Send polite unauthorized message back with their OpenID
                 err_msg = (
