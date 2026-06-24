@@ -254,37 +254,62 @@ class FeishuAdapter(BasePlatformAdapter):
                 .content(card_json)
                 .build()
             )
-        else:
-            # Send as plain text
-            body = (
-                CreateMessageRequestBody.builder()
-                .receive_id(chat_id)
-                .msg_type("text")
-                .content(json.dumps({"text": content}, ensure_ascii=False))
+            request = (
+                CreateMessageRequest.builder()
+                .receive_id_type("chat_id")
+                .request_body(body)
                 .build()
             )
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self._client.im.v1.message.create(request)
+            )
 
-        request = (
-            CreateMessageRequest.builder()
-            .receive_id_type("chat_id")
-            .request_body(body)
-            .build()
-        )
+            if response.code != 0:
+                logger.error("[Feishu] Failed to send message: %s (%s)", response.msg, response.code)
+                raise RuntimeError(f"Feishu send failed: {response.msg}")
 
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self._client.im.v1.message.create(request)
-        )
+            # Parse message ID from response data
+            data_dict = json.loads(response.raw.content.decode("utf-8"))
+            msg_id = data_dict.get("data", {}).get("message_id", "")
+            return msg_id
+        else:
+            # Send as plain text, split into chunks if too long to avoid Feishu API limits (typically 30KB)
+            chunk_size = 5000
+            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+            if not chunks:
+                chunks = [""]
 
-        if response.code != 0:
-            logger.error("[Feishu] Failed to send message: %s (%s)", response.msg, response.code)
-            raise RuntimeError(f"Feishu send failed: {response.msg}")
+            last_msg_id = ""
+            for chunk in chunks:
+                body = (
+                    CreateMessageRequestBody.builder()
+                    .receive_id(chat_id)
+                    .msg_type("text")
+                    .content(json.dumps({"text": chunk}, ensure_ascii=False))
+                    .build()
+                )
+                request = (
+                    CreateMessageRequest.builder()
+                    .receive_id_type("chat_id")
+                    .request_body(body)
+                    .build()
+                )
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda req=request: self._client.im.v1.message.create(req)
+                )
 
-        # Parse message ID from response data
-        data_dict = json.loads(response.raw.content.decode("utf-8"))
-        msg_id = data_dict.get("data", {}).get("message_id", "")
-        return msg_id
+                if response.code != 0:
+                    logger.error("[Feishu] Failed to send text chunk: %s (%s)", response.msg, response.code)
+                    raise RuntimeError(f"Feishu send failed: {response.msg}")
+
+                data_dict = json.loads(response.raw.content.decode("utf-8"))
+                last_msg_id = data_dict.get("data", {}).get("message_id", "")
+                
+            return last_msg_id
 
     async def update_message(
         self,
