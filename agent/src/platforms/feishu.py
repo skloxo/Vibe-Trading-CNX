@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 from typing import Any, Dict, List, Optional, Set
 
@@ -16,11 +17,13 @@ CreateMessageRequest = None
 CreateMessageRequestBody = None
 UpdateMessageRequest = None
 UpdateMessageRequestBody = None
+PatchMessageRequest = None
+PatchMessageRequestBody = None
 EventDispatcherHandler = None
 
 
 def _ensure_lark_imports():
-    global lark, FeishuWSClient, CreateMessageRequest, CreateMessageRequestBody, UpdateMessageRequest, UpdateMessageRequestBody, EventDispatcherHandler
+    global lark, FeishuWSClient, CreateMessageRequest, CreateMessageRequestBody, UpdateMessageRequest, UpdateMessageRequestBody, PatchMessageRequest, PatchMessageRequestBody, EventDispatcherHandler
     if lark is not None:
         return
     import lark_oapi
@@ -29,6 +32,8 @@ def _ensure_lark_imports():
     from lark_oapi.api.im.v1.model.create_message_request_body import CreateMessageRequestBody
     from lark_oapi.api.im.v1.model.update_message_request import UpdateMessageRequest
     from lark_oapi.api.im.v1.model.update_message_request_body import UpdateMessageRequestBody
+    from lark_oapi.api.im.v1.model.patch_message_request import PatchMessageRequest
+    from lark_oapi.api.im.v1.model.patch_message_request_body import PatchMessageRequestBody
     from lark_oapi.event.dispatcher_handler import EventDispatcherHandler
     lark = lark_oapi
 
@@ -147,6 +152,7 @@ class FeishuAdapter(BasePlatformAdapter):
             # to isolate it from the main uvloop used by FastAPI
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            self._ws_loop = loop
             print(f"[Feishu WS Thread] Calling ws_client.start() blockingly...", flush=True)
             self._ws_client.start()
             print(f"[Feishu WS Thread] ws_client.start() returned successfully.", flush=True)
@@ -284,7 +290,7 @@ class FeishuAdapter(BasePlatformAdapter):
         # Rather than sending API request instantly, we mark it as pending
         # The background loop will flush it to comply with Feishu rate limits.
         status = self._pending_card_statuses.get(message_id, "running")
-        self._pending_card_updates[message_id] = (chat_id, title or "Agent Status", content)
+        self._pending_card_updates[message_id] = (chat_id, title, content)
         self._pending_card_statuses[message_id] = status
 
     async def update_message_immediate(
@@ -292,18 +298,18 @@ class FeishuAdapter(BasePlatformAdapter):
         chat_id: str,
         message_id: str,
         content: str,
-        title: str,
+        title: Optional[str],
         status: str,
     ) -> None:
         _ensure_lark_imports()
         card_json = self._build_card_json(title, content, status)
         body = (
-            UpdateMessageRequestBody.builder()
+            PatchMessageRequestBody.builder()
             .content(card_json)
             .build()
         )
         request = (
-            UpdateMessageRequest.builder()
+            PatchMessageRequest.builder()
             .message_id(message_id)
             .request_body(body)
             .build()
@@ -312,11 +318,14 @@ class FeishuAdapter(BasePlatformAdapter):
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
             None,
-            lambda: self._client.im.v1.message.update(request)
+            lambda: self._client.im.v1.message.patch(request)
         )
 
         if response.code != 0:
-            logger.warning("[Feishu] Failed to update message %s: %s (code %s)", message_id, response.msg, response.code)
+            raw_err = response.raw.content.decode("utf-8") if response.raw else "No raw content"
+            logger.warning("[Feishu] Failed to update message %s: %s (code %s). Raw response: %s", message_id, response.msg, response.code, raw_err)
+        else:
+            logger.info("[Feishu] Successfully updated message %s", message_id)
 
     def set_message_status(self, message_id: str, status: str) -> None:
         """Mark a pending update message status as success or failed."""
@@ -345,36 +354,120 @@ class FeishuAdapter(BasePlatformAdapter):
             except Exception as e:
                 logger.error("[Feishu] Error in card flush loop: %s", e)
 
-    def _split_markdown_into_elements(self, text: str) -> List[Dict[str, Any]]:
-        elements = []
-        chunk_size = 15000
+    def _parse_markdown_into_elements(self, text: str) -> List[Dict[str, Any]]:
         if not text:
-            text = "..."
-        for i in range(0, len(text), chunk_size):
-            chunk = text[i:i+chunk_size]
-            elements.append({
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": chunk
-                }
-            })
+            return [{"tag": "markdown", "content": "..."}]
+            
+        elements = []
+        lines = text.split("\n")
+        n = len(lines)
+        i = 0
+        current_md_chunk = []
+        
+        def flush_md_chunk():
+            if current_md_chunk:
+                md_text = "\n".join(current_md_chunk)
+                chunk_size = 15000
+                for offset in range(0, len(md_text), chunk_size):
+                    elements.append({
+                        "tag": "markdown",
+                        "content": md_text[offset:offset+chunk_size]
+                    })
+                current_md_chunk.clear()
+                
+        while i < n:
+            line = lines[i]
+            stripped = line.strip()
+            if (stripped.startswith("|") and stripped.endswith("|") and 
+                i + 1 < n and 
+                lines[i+1].strip().startswith("|") and 
+                lines[i+1].strip().endswith("|") and 
+                re.match(r"^\|\s*[:-]+[\s:-]*\|", lines[i+1].strip())):
+                
+                flush_md_chunk()
+                
+                headers = [c.strip() for c in stripped.split("|")]
+                if len(headers) > 1 and headers[0] == "":
+                    headers = headers[1:]
+                if len(headers) > 0 and headers[-1] == "":
+                    headers = headers[:-1]
+                
+                i += 2
+                
+                rows_data = []
+                while i < n and lines[i].strip().startswith("|") and lines[i].strip().endswith("|"):
+                    row_cells = [c.strip() for c in lines[i].split("|")]
+                    if len(row_cells) > 1 and row_cells[0] == "":
+                        row_cells = row_cells[1:]
+                    if len(row_cells) > 0 and row_cells[-1] == "":
+                        row_cells = row_cells[:-1]
+                    
+                    while len(row_cells) < len(headers):
+                        row_cells.append("")
+                    if len(row_cells) > len(headers):
+                        row_cells = row_cells[:len(headers)]
+                        
+                    rows_data.append(row_cells)
+                    i += 1
+                    
+                columns = [
+                    {
+                        "name": f"col_{idx}",
+                        "display_name": header or f"列 {idx+1}",
+                        "data_type": "text"
+                    }
+                    for idx, header in enumerate(headers)
+                ]
+                rows = [
+                    {
+                        f"col_{idx}": val for idx, val in enumerate(row_cells)
+                    }
+                    for row_cells in rows_data
+                ]
+                
+                elements.append({
+                    "tag": "table",
+                    "columns": columns,
+                    "rows": rows
+                })
+            else:
+                current_md_chunk.append(line)
+                i += 1
+                
+        flush_md_chunk()
         return elements
 
+    def _preprocess_markdown(self, text: str) -> str:
+        if not text:
+            return text
+            
+        # 1. 转换标题 ## -> 加粗并加 Emoji 前缀，使排版更清晰端正，支持飞书 Markdown
+        text = re.sub(r'(?m)^#\s+(.*)$', r'**👑 \1**', text)
+        text = re.sub(r'(?m)^##\s+(.*)$', r'**■ \1**', text)
+        text = re.sub(r'(?m)^###\s+(.*)$', r'**○ \1**', text)
+        
+        return text
+
     def _build_card_json(self, title: Optional[str], content: str, status: str = "running") -> str:
+        # 在构建 JSON 卡片内容的最开始，对 Markdown 进行预处理，转换标题
+        content = self._preprocess_markdown(content)
+
         template_color = "blue"
         if status == "success":
             template_color = "green"
         elif status == "failed":
             template_color = "red"
             
-        elements = self._split_markdown_into_elements(content)
+        elements = self._parse_markdown_into_elements(content)
         
         card = {
+            "schema": "2.0",
             "config": {
                 "wide_screen_mode": True
             },
-            "elements": elements
+            "body": {
+                "elements": elements
+            }
         }
         
         if title:
@@ -390,11 +483,26 @@ class FeishuAdapter(BasePlatformAdapter):
 
     def _stop_ws_client_thread(self) -> None:
         try:
-            # Create a separate loop to shutdown client blockingly
-            # without interfering with main FastAPI uvloop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._ws_client.stop()
+            if hasattr(self._ws_client, "stop"):
+                self._ws_client.stop()
+            elif hasattr(self._ws_client, "_disconnect"):
+                loop = getattr(self, "_ws_loop", None)
+                if loop and loop.is_running():
+                    if asyncio.iscoroutinefunction(self._ws_client._disconnect):
+                        future = asyncio.run_coroutine_threadsafe(self._ws_client._disconnect(), loop)
+                        try:
+                            future.result(timeout=3.0)
+                        except Exception as te:
+                            logger.warning("[Feishu] Timeout or error awaiting _disconnect: %s", te)
+                    else:
+                        loop.call_soon_threadsafe(self._ws_client._disconnect)
+                else:
+                    temp_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(temp_loop)
+                    if asyncio.iscoroutinefunction(self._ws_client._disconnect):
+                        temp_loop.run_until_complete(self._ws_client._disconnect())
+                    else:
+                        self._ws_client._disconnect()
         except Exception as e:
             logger.exception("[Feishu] Error stopping WebSocket client in thread: %s", e)
 

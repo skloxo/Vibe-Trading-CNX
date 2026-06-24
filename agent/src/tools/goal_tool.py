@@ -209,6 +209,21 @@ class StartResearchGoalTool(_GoalToolBase):
             )
             snapshot = self._store.get_goal_snapshot(goal.goal_id)
             if snapshot is not None:
+                try:
+                    from src.session.store import SessionStore
+                    from src.session.search import get_shared_index
+                    sessions_dir = Path(__file__).resolve().parents[2] / "sessions"
+                    session_store = SessionStore(base_dir=sessions_dir)
+                    session = session_store.get_session(session_id)
+                    if session:
+                        session.title = str(kwargs.get("objective", "")).strip()[:50]
+                        session_store.update_session(session)
+                        try:
+                            get_shared_index().index_session(session_id, session.title)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 self._emit("goal.created", {"goal": snapshot["goal"]})
             return json.dumps({"status": "ok", "snapshot": snapshot}, ensure_ascii=False)
         except (TypeError, ValueError) as exc:

@@ -156,6 +156,22 @@ class RunResearchAutopilotTool(BaseTool):
 
             snapshot = store.get_goal_snapshot(goal.goal_id)
 
+            try:
+                from src.session.store import SessionStore
+                from src.session.search import get_shared_index
+                sessions_dir = Path(__file__).resolve().parents[2] / "sessions"
+                session_store = SessionStore(base_dir=sessions_dir)
+                session = session_store.get_session(session_id)
+                if session:
+                    session.title = f"Research Autopilot: {hypothesis.title}"[:50]
+                    session_store.update_session(session)
+                    try:
+                        get_shared_index().index_session(session_id, session.title)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             hypothesis_summary = {
                 "hypothesis_id": hypothesis.hypothesis_id,
                 "title": hypothesis.title,

@@ -2251,6 +2251,12 @@ async def create_session_goal(session_id: str, req: CreateGoalRequest):
     snapshot = goal_store.get_goal_snapshot(goal.goal_id)
     if snapshot is None:
         raise HTTPException(status_code=500, detail="Goal created but could not be reloaded")
+
+    if _session:
+        _session.title = req.objective.strip()[:50]
+        svc.store.update_session(_session)
+        svc._search_index.index_session(_session.session_id, _session.title)
+
     svc.event_bus.emit(session_id, "goal.created", {"goal": snapshot["goal"]})
     return snapshot
 

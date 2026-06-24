@@ -156,6 +156,34 @@ def test_platform_manager_multiple_channels():
     assert session_id == "session_123"
     
     args, kwargs = session_service.create_session.call_args
-    assert kwargs["title"] == "飞书通道A 会话 (chat_abc)"
+    assert kwargs["title"] == "💬 test"
     assert kwargs["config"]["platform"] == "feishu_chan_1"
+
+    # Test fallback title when content is empty
+    session_service.create_session.reset_mock()
+    incoming_empty = IncomingMessage(
+        platform="feishu_chan_1",
+        chat_id="chat_abc",
+        message_id="msg_2",
+        content="",
+        sender_id="sender_1",
+        timestamp=124.0
+    )
+    session_id = asyncio.run(manager._resolve_or_create_session(incoming_empty))
+    args, kwargs = session_service.create_session.call_args
+    assert kwargs["title"] == "飞书通道A 会话 (chat_abc)"
+
+    # Test slash commands prefix stripping
+    session_service.create_session.reset_mock()
+    incoming_goal = IncomingMessage(
+        platform="feishu_chan_1",
+        chat_id="chat_abc",
+        message_id="msg_3",
+        content="/goal 分析腾讯控股",
+        sender_id="sender_1",
+        timestamp=125.0
+    )
+    session_id = asyncio.run(manager._resolve_or_create_session(incoming_goal))
+    args, kwargs = session_service.create_session.call_args
+    assert kwargs["title"] == "💬 分析腾讯控股"
 
