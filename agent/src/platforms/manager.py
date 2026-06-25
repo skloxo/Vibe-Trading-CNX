@@ -164,7 +164,7 @@ class PlatformManager:
         current_status = "💡 正在启动智能体..."
         
         # Helper to format status card content
-        def build_progress_markdown() -> str:
+        def build_progress_markdown(show_preview: bool = True) -> str:
             lines = [
                 f"**您的问题：** {user_prompt[:200]}...",
                 "---",
@@ -172,7 +172,7 @@ class PlatformManager:
             ]
             if current_thinking:
                 lines.append(f"**思考中：**\n> {current_thinking}")
-            if current_text:
+            if current_text and show_preview:
                 lines.append("---")
                 lines.append("**最新回答预览：**")
                 # Expose a preview of the response
@@ -230,7 +230,7 @@ class PlatformManager:
                     
                     current_status = "🎉 分析完成！"
                     current_thinking = ""
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
                     
                     # Fetch final complete response content from store or attempt summary
                     summary = data.get("summary", "")
@@ -255,7 +255,7 @@ class PlatformManager:
                     
                     error = data.get("error", "未知运行错误")
                     current_status = f"❌ 运行遇到错误:\n```\n{error}\n```"
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
                     break
 
         except asyncio.CancelledError:
@@ -264,14 +264,14 @@ class PlatformManager:
                 if hasattr(adapter, "set_message_status"):
                     adapter.set_message_status(progress_msg_id, "failed")
                 current_status = "⚠️ 该会话已被新发起的任务中断。"
-                await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
         except Exception as e:
             logger.exception("[PlatformManager] Error tracking progress for session %s: %s", session_id, e)
             if progress_msg_id:
                 if hasattr(adapter, "set_message_status"):
                     adapter.set_message_status(progress_msg_id, "failed")
                 current_status = f"❌ 运行监控异常: {e}"
-                await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
         finally:
             self._running_trackers.pop(session_id, None)
 
