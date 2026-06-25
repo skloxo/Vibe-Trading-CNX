@@ -113,25 +113,9 @@ class FeishuAdapter(BasePlatformAdapter):
             logger.warning(f"[Feishu] App ID or App Secret is not configured for channel {self._name}. Channel disabled.")
             return
 
-        # Initialize Lark API Client
+        # Initialize Lark API Client (HTTP client)
         domain = os.getenv("FEISHU_DOMAIN", "https://open.feishu.cn").strip()
         self._client = lark.Client.builder().app_id(self._app_id).app_secret(self._app_secret).domain(domain).build()
-
-        # Build Event Handler
-        event_handler = (
-            EventDispatcherHandler.builder("", "")
-            .register_p2_im_message_receive_v1(self._on_message_received)
-            .build()
-        )
-
-        # Setup WebSocket Client
-        self._ws_client = FeishuWSClient(
-            app_id=self._app_id,
-            app_secret=self._app_secret,
-            log_level=lark.LogLevel.INFO,
-            event_handler=event_handler,
-            domain=domain,
-        )
 
         self._is_running = True
         self._card_updater_task = asyncio.create_task(self._card_flush_loop())
@@ -146,19 +130,99 @@ class FeishuAdapter(BasePlatformAdapter):
         logger.info(f"[Feishu] WebSocket adapter initialized and started in dedicated thread for channel: {self._name}")
 
     def _run_ws_client_thread(self) -> None:
-        print(f"[Feishu WS Thread] Thread started for channel '{self._name}' ({self._channel_id}). Isolating event loop...", flush=True)
+        logger.info(f"[Feishu WS Thread] Thread started for channel '{self._name}' ({self._channel_id}).")
+        import time
+
+        # 只要外部 adapter 仍在运行，就在此循环内保持 WS 客户端活跃
+        while self._is_running:
+            try:
+                # 每次重连前，创建一个全新的 event loop 确保环境干净
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self._ws_loop = loop
+                
+                # 为该轮连接实例化一个全新的 FeishuWSClient
+                domain = os.getenv("FEISHU_DOMAIN", "https://open.feishu.cn").strip()
+                event_handler = (
+                    EventDispatcherHandler.builder("", "")
+                    .register_p2_im_message_receive_v1(self._on_message_received)
+                    .build()
+                )
+                self._ws_client = FeishuWSClient(
+                    app_id=self._app_id,
+                    app_secret=self._app_secret,
+                    log_level=lark.LogLevel.INFO,
+                    event_handler=event_handler,
+                    domain=domain,
+                )
+                
+                logger.info(f"[Feishu WS Thread] Launching custom start sequence for channel '{self._name}'...")
+                loop.run_until_complete(self._custom_start())
+                logger.info(f"[Feishu WS Thread] Custom start sequence returned for channel '{self._name}'.")
+            except Exception as e:
+                logger.exception(f"[Feishu WS Thread] Error running WebSocket client sequence: %s", e)
+            finally:
+                # 确保当前 loop 彻底关闭，并在关闭前取消所有 pending 任务，避免垃圾回收时报错
+                try:
+                    if hasattr(self, "_ws_loop") and self._ws_loop and not self._ws_loop.is_closed():
+                        pending = asyncio.all_tasks(self._ws_loop)
+                        for task in pending:
+                            task.cancel()
+                        if pending:
+                            self._ws_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        self._ws_loop.close()
+                except Exception as ce:
+                    logger.warning("[Feishu WS Thread] Error closing event loop: %s", ce)
+            
+            # 如果依然在运行，等待 5 秒后触发下一次重建与重连
+            if self._is_running:
+                logger.info(f"[Feishu WS Thread] Connection lost or failed to start. Re-trying in 5 seconds...")
+                time.sleep(5)
+        
+        logger.info(f"[Feishu WS Thread] Thread exiting for channel '{self._name}'.")
+
+    async def _custom_start(self) -> None:
+        """自定义启动逻辑，避开官方 start() 内部对 _select() 的死等，实现可靠的断线检测。"""
+        from websockets.protocol import State
+        
+        # 1. 触发连接
         try:
-            # Create a brand new event loop for this background thread
-            # to isolate it from the main uvloop used by FastAPI
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._ws_loop = loop
-            print(f"[Feishu WS Thread] Calling ws_client.start() blockingly...", flush=True)
-            self._ws_client.start()
-            print(f"[Feishu WS Thread] ws_client.start() returned successfully.", flush=True)
+            logger.info("[Feishu] Custom start: Attempting initial connection...")
+            await self._ws_client._connect()
+            logger.info("[Feishu] Custom start: Initial connection successful.")
         except Exception as e:
-            print(f"[Feishu WS Thread] ERROR: Failed to run WebSocket client: {e}", flush=True)
-            logger.exception("[Feishu] Error running WebSocket client in thread: %s", e)
+            logger.error("[Feishu] Custom start: Initial connection failed: %s. Initiating client reconnect...", e)
+            await self._ws_client._disconnect()
+            await self._ws_client._reconnect()
+            logger.info("[Feishu] Custom start: Reconnect finished.")
+
+        # 2. 启动心跳 ping 循环
+        ping_task = self._ws_loop.create_task(self._ws_client._ping_loop())
+        logger.info("[Feishu] Custom start: Heartbeat ping loop started.")
+
+        # 3. 监控连接状态，发现异常即退出循环以触发外层重建
+        try:
+            while self._is_running:
+                await asyncio.sleep(2)
+                # 检测底层 websockets.WebSocketClientProtocol 状态
+                conn = self._ws_client._conn
+                if conn is None or conn.state != State.OPEN:
+                    logger.warning("[Feishu] Custom start: WS connection detected as closed or not OPEN.")
+                    break
+        except asyncio.CancelledError:
+            logger.info("[Feishu] Custom start: Monitor loop cancelled.")
+        except Exception as me:
+            logger.error("[Feishu] Custom start: Exception in monitor loop: %s", me)
+        finally:
+            # 清理 ping_task 和连接
+            ping_task.cancel()
+            try:
+                await ping_task
+            except asyncio.CancelledError:
+                pass
+            
+            logger.info("[Feishu] Custom start: Cleaning up WS connection...")
+            await self._ws_client._disconnect()
 
     def _on_message_received(self, data: Any) -> None:
         """Invoked by lark-oapi on a background thread when a new message arrives."""
@@ -266,10 +330,20 @@ class FeishuAdapter(BasePlatformAdapter):
             .build()
         )
         loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self._client.im.v1.message.create(request)
-        )
+        try:
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self._client.im.v1.message.create(request)
+                ),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.error("[Feishu] Timeout sending message to chat %s after 10 seconds", chat_id)
+            raise RuntimeError(f"Timeout sending message to chat {chat_id}")
+        except Exception as e:
+            logger.error("[Feishu] Exception sending message to chat %s: %s", chat_id, e)
+            raise e
 
         if response.code != 0:
             logger.error("[Feishu] Failed to send message: %s (%s)", response.msg, response.code)
@@ -316,10 +390,20 @@ class FeishuAdapter(BasePlatformAdapter):
         )
 
         loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self._client.im.v1.message.patch(request)
-        )
+        try:
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self._client.im.v1.message.patch(request)
+                ),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.error("[Feishu] Timeout updating message %s via API after 10 seconds", message_id)
+            raise RuntimeError(f"Timeout updating message {message_id}")
+        except Exception as e:
+            logger.error("[Feishu] Exception updating message %s via API: %s", message_id, e)
+            raise e
 
         if response.code != 0:
             raw_err = response.raw.content.decode("utf-8") if response.raw else "No raw content"
@@ -333,6 +417,9 @@ class FeishuAdapter(BasePlatformAdapter):
 
     async def _card_flush_loop(self) -> None:
         """Background loop that flushes card updates once every 1.5 seconds to prevent rate-limiting."""
+        retries_limit = 3
+        failed_msg_retries = {}  # msg_id -> count
+
         while self._is_running:
             try:
                 await asyncio.sleep(1.5)
@@ -342,13 +429,31 @@ class FeishuAdapter(BasePlatformAdapter):
                 # Take a snapshot of pending updates to process
                 to_update = list(self._pending_card_updates.keys())
                 for msg_id in to_update:
-                    chat_id, title, content = self._pending_card_updates.pop(msg_id)
-                    status = self._pending_card_statuses.pop(msg_id, "running")
+                    update_data = self._pending_card_updates.get(msg_id)
+                    if not update_data:
+                        continue
+                    chat_id, title, content = update_data
+                    status = self._pending_card_statuses.get(msg_id, "running")
                     
                     try:
                         await self.update_message_immediate(chat_id, msg_id, content, title, status)
+                        # 成功后，从 pending 中 pop 掉，并清除重试计数
+                        self._pending_card_updates.pop(msg_id, None)
+                        self._pending_card_statuses.pop(msg_id, None)
+                        failed_msg_retries.pop(msg_id, None)
                     except Exception as e:
                         logger.error("[Feishu] Failed to update card %s in flush loop: %s", msg_id, e)
+                        
+                        # 增加重试计数
+                        count = failed_msg_retries.get(msg_id, 0) + 1
+                        if count >= retries_limit:
+                            logger.error("[Feishu] Card %s update reached retry limit (%d). Dropping update.", msg_id, retries_limit)
+                            self._pending_card_updates.pop(msg_id, None)
+                            self._pending_card_statuses.pop(msg_id, None)
+                            failed_msg_retries.pop(msg_id, None)
+                        else:
+                            failed_msg_retries[msg_id] = count
+                            # 保留在 pending 中，等下一次循环重试
             except asyncio.CancelledError:
                 break
             except Exception as e:
