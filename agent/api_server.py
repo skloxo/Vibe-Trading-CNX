@@ -137,6 +137,39 @@ class RunResponse(BaseModel):
     trade_markers: Optional[List[Dict[str, Any]]] = Field(None, description="Trade markers for charts")
     run_logs: Optional[List[Dict[str, Any]]] = Field(None, description="Structured stdout/stderr lines")
 
+class FeishuChannelResponse(BaseModel):
+    """Detailed information for a single Feishu channel."""
+    channel_id: str
+    name: str
+    enabled: bool
+    app_id: str
+    app_secret_configured: bool
+    allowed_users: str
+    allow_all_users: bool
+    public_debug_mode: bool
+
+
+class CreateFeishuChannelRequest(BaseModel):
+    """Payload to create a new Feishu channel."""
+    name: str = Field(..., min_length=1)
+    enabled: bool = True
+    app_id: str = Field(..., min_length=1)
+    app_secret: str = Field(..., min_length=1)
+    allowed_users: str = ""
+    allow_all_users: bool = False
+    public_debug_mode: bool = False
+
+
+class UpdateFeishuChannelRequest(BaseModel):
+    """Payload to update an existing Feishu channel."""
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+    app_id: Optional[str] = None
+    app_secret: Optional[str] = None
+    allowed_users: Optional[str] = None
+    allow_all_users: Optional[bool] = None
+    public_debug_mode: Optional[bool] = None
+
 
 class HealthResponse(BaseModel):
     """Health check payload."""
@@ -197,10 +230,6 @@ class DataSourceSettingsResponse(BaseModel):
 
     tushare_token_configured: bool
     tushare_token_hint: Optional[str] = None
-    iwencai_key_configured: bool = False
-    iwencai_key_hint: Optional[str] = None
-    fred_api_key_configured: bool = False
-    fred_api_key_hint: Optional[str] = None
     baostock_supported: bool
     baostock_installed: bool
     baostock_message: str
@@ -212,50 +241,6 @@ class UpdateDataSourceSettingsRequest(BaseModel):
 
     tushare_token: Optional[str] = None
     clear_tushare_token: bool = False
-    iwencai_key: Optional[str] = None
-    clear_iwencai_key: bool = False
-    fred_api_key: Optional[str] = None
-    clear_fred_api_key: bool = False
-
-
-class FeishuChannelResponse(BaseModel):
-    """Detailed information for a single Feishu channel."""
-    id: str
-    name: str
-    app_id: str
-    app_secret_configured: bool
-    allowed_users: str
-    allow_all_users: bool
-    enabled: bool
-
-
-class CreateFeishuChannelRequest(BaseModel):
-    """Payload to create a new Feishu channel."""
-    name: str
-    app_id: str
-    app_secret: str
-    allowed_users: Optional[str] = ""
-    allow_all_users: bool = False
-    enabled: bool = True
-
-
-class UpdateFeishuChannelRequest(BaseModel):
-    """Payload to update an existing Feishu channel."""
-    name: str
-    app_id: str
-    app_secret: Optional[str] = None
-    allowed_users: Optional[str] = ""
-    allow_all_users: bool = False
-    enabled: bool = True
-
-
-class FeatureFlagsResponse(BaseModel):
-    """Current feature flag state."""
-
-    shell_tools_enabled: bool
-    scheduler_enabled: bool
-    session_runtime_enabled: bool
-    env_path: str
 
 
 # ---- V4 Session Models ----
@@ -672,7 +657,6 @@ async def _spa_html_deep_link_fallback(request: Request, call_next):
                 return FileResponse(str(index))
     return await call_next(request)
 
-
 FEISHU_SECRET_PLACEHOLDERS: set[str] = {"", "your-feishu-app-secret"}
 FEISHU_CHANNELS_JSON = Path(__file__).resolve().parent / "sessions" / "feishu_channels.json"
 
@@ -770,8 +754,6 @@ async def _run_startup_preflight() -> None:
 
     run_preflight(console)
     _start_scheduled_research_executor()
-
-    # Initialize Platform Manager for multi-channel messaging (e.g. Feishu Bot)
     await _reload_platform_manager()
 
 
@@ -871,19 +853,43 @@ def _is_loopback_origin(origin: str) -> bool:
         return False
 
 
+def _origin_matches_request_host(origin: str, request: Request) -> bool:
+    """Return whether ``origin`` is the same site serving this request."""
+    try:
+        parsed = urllib.parse.urlsplit(origin)
+    except ValueError:
+        return False
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+
+    origin_host = parsed.hostname.rstrip(".").lower()
+    origin_port = parsed.port
+    request_host = _host_without_port(request.headers.get("host", ""))
+    if origin_host != request_host:
+        return False
+
+    if origin_port is None:
+        origin_port = 443 if parsed.scheme == "https" else 80
+    request_port = request.url.port
+    if request_port is None:
+        request_port = 443 if request.url.scheme == "https" else 80
+    return origin_port == request_port
+
+
 def _reject_cross_site_browser_request(request: Request) -> None:
-    """Reject unsafe browser requests from non-loopback origins.
+    """Reject unsafe browser requests from untrusted cross-site origins.
 
     CORS protects response reads, not blind form/fetch side effects. Keep local
-    CLI/curl clients working while refusing browser-originated cross-site POSTs
-    to local control-plane actions such as shutdown.
+    CLI/curl clients and same-origin browser UI deployments working while
+    refusing browser-originated cross-site POSTs to local control-plane actions
+    such as shutdown.
     """
     sec_fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if sec_fetch_site == "cross-site":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
 
     origin = request.headers.get("origin")
-    if origin and not _is_loopback_origin(origin):
+    if origin and not (_is_loopback_origin(origin) or _origin_matches_request_host(origin, request)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
 
 
@@ -1007,24 +1013,13 @@ def _env_shell_tools_enabled() -> bool:
 
 
 def _shell_tools_enabled_for_request(request: Request) -> bool:
-    """Return whether this API request may expose shell tools to the agent.
-
-    Decision order:
-    1. If ``VIBE_TRADING_ENABLE_SHELL_TOOLS`` is explicitly set, honour it
-       (explicit opt-out takes precedence).
-    2. If ``API_AUTH_KEY`` is configured the API requires authentication;
-       callers that passed auth are trusted, so shell tools default on.
-       This avoids a common deployment pitfall where operators configure
-       auth but forget to set the shell-tools flag.
-    3. Otherwise shell tools stay off (secure default).
-    """
-    explicit = os.getenv(_SHELL_TOOLS_ENV)
-    if explicit is not None:
-        return _env_flag_enabled(_SHELL_TOOLS_ENV)
-    # Authenticated API → implicitly trust the caller
-    if _configured_api_key():
-        return True
-    return False
+    """Return whether this API request may expose shell tools to the agent."""
+    # Shell-capable tools execute commands on the host as the API process user.
+    # Do not infer that privilege from peer IP alone: browser DNS rebinding can
+    # make attacker-controlled pages appear as loopback clients. Operators who
+    # intentionally want API-started agents or swarm workers to receive shell
+    # tools must opt in explicitly.
+    return _env_shell_tools_enabled()
 
 
 async def require_local_or_auth(
@@ -1269,19 +1264,11 @@ def _baostock_installed() -> bool:
     return importlib.util.find_spec("baostock") is not None
 
 
-IWENCAI_KEY_PLACEHOLDERS: set[str] = {"", "your-iwencai-key"}
-FRED_API_KEY_PLACEHOLDERS: set[str] = {"", "your-fred-api-key"}
-
-
 def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None) -> DataSourceSettingsResponse:
     """Build the public data source settings payload."""
     env_values = values if values is not None else _read_settings_env_values()
     token = env_values.get("TUSHARE_TOKEN", "")
     token_configured = _is_configured_secret(token, TUSHARE_TOKEN_PLACEHOLDERS)
-    iwencai_key = env_values.get("VIBE_TRADING_IWENCAI_KEY", "")
-    iwencai_key_configured = _is_configured_secret(iwencai_key, IWENCAI_KEY_PLACEHOLDERS)
-    fred_key = env_values.get("FRED_API_KEY", "")
-    fred_key_configured = _is_configured_secret(fred_key, FRED_API_KEY_PLACEHOLDERS)
     supported = _baostock_supported()
     installed = _baostock_installed()
     if supported:
@@ -1293,10 +1280,6 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
     return DataSourceSettingsResponse(
         tushare_token_configured=token_configured,
         tushare_token_hint=None,
-        iwencai_key_configured=iwencai_key_configured,
-        iwencai_key_hint=None,
-        fred_api_key_configured=fred_key_configured,
-        fred_api_key_hint=None,
         baostock_supported=supported,
         baostock_installed=installed,
         baostock_message=baostock_message,
@@ -1824,20 +1807,6 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
     elif "TUSHARE_TOKEN" in current_values:
         updates["TUSHARE_TOKEN"] = current_values["TUSHARE_TOKEN"]
 
-    if payload.clear_iwencai_key:
-        updates["VIBE_TRADING_IWENCAI_KEY"] = ""
-    elif payload.iwencai_key is not None and payload.iwencai_key.strip():
-        updates["VIBE_TRADING_IWENCAI_KEY"] = payload.iwencai_key.strip()
-    elif "VIBE_TRADING_IWENCAI_KEY" in current_values:
-        updates["VIBE_TRADING_IWENCAI_KEY"] = current_values["VIBE_TRADING_IWENCAI_KEY"]
-
-    if payload.clear_fred_api_key:
-        updates["FRED_API_KEY"] = ""
-    elif payload.fred_api_key is not None and payload.fred_api_key.strip():
-        updates["FRED_API_KEY"] = payload.fred_api_key.strip()
-    elif "FRED_API_KEY" in current_values:
-        updates["FRED_API_KEY"] = current_values["FRED_API_KEY"]
-
     if updates:
         _write_env_values(ENV_PATH, updates)
         token = updates.get("TUSHARE_TOKEN", "").strip()
@@ -1845,21 +1814,8 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
             os.environ["TUSHARE_TOKEN"] = token
         else:
             os.environ.pop("TUSHARE_TOKEN", None)
-        iwencai_key = updates.get("VIBE_TRADING_IWENCAI_KEY", "").strip()
-        if _is_configured_secret(iwencai_key, IWENCAI_KEY_PLACEHOLDERS):
-            os.environ["VIBE_TRADING_IWENCAI_KEY"] = iwencai_key
-        else:
-            os.environ.pop("VIBE_TRADING_IWENCAI_KEY", None)
-        fred_key = updates.get("FRED_API_KEY", "").strip()
-        if _is_configured_secret(fred_key, FRED_API_KEY_PLACEHOLDERS):
-            os.environ["FRED_API_KEY"] = fred_key
-        else:
-            os.environ.pop("FRED_API_KEY", None)
 
     return _build_data_source_settings_response(_read_env_values(ENV_PATH))
-
-
-FEISHU_SECRET_PLACEHOLDERS: set[str] = {"", "your-feishu-app-secret"}
 
 
 @app.get(
@@ -1939,11 +1895,16 @@ async def update_feishu_channel(channel_id: str, payload: UpdateFeishuChannelReq
         raise HTTPException(status_code=404, detail="Feishu channel not found")
         
     c = channels[target_idx]
-    c["name"] = payload.name.strip()
-    c["app_id"] = payload.app_id.strip()
-    c["allowed_users"] = payload.allowed_users.strip()
-    c["allow_all_users"] = payload.allow_all_users
-    c["enabled"] = payload.enabled
+    if payload.name is not None:
+        c["name"] = payload.name.strip()
+    if payload.app_id is not None:
+        c["app_id"] = payload.app_id.strip()
+    if payload.allowed_users is not None:
+        c["allowed_users"] = payload.allowed_users.strip()
+    if payload.allow_all_users is not None:
+        c["allow_all_users"] = payload.allow_all_users
+    if payload.enabled is not None:
+        c["enabled"] = payload.enabled
     
     if payload.app_secret is not None:
         app_secret = payload.app_secret.strip()
@@ -1985,21 +1946,6 @@ async def delete_feishu_channel(channel_id: str):
     await _reload_platform_manager()
     
     return {"status": "success"}
-
-
-@app.get(
-    "/settings/feature-flags",
-    response_model=FeatureFlagsResponse,
-    dependencies=[Depends(require_local_or_auth)],
-)
-async def get_feature_flags():
-    """Return current feature flag state."""
-    return FeatureFlagsResponse(
-        shell_tools_enabled=_env_shell_tools_enabled(),
-        scheduler_enabled=_scheduled_research_scheduler_enabled(),
-        session_runtime_enabled=os.getenv("ENABLE_SESSION_RUNTIME", "true").lower() == "true",
-        env_path=_project_relative_path(ENV_PATH),
-    )
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -3629,7 +3575,7 @@ register_alpha_routes(app)
 #
 # Lightweight CRUD endpoints backed by ScheduledResearchJobStore. The endpoint
 # handlers only record and expose jobs; the optional executor lifecycle is
-# guarded separately by VIBE_TRADING_ENABLE_SCHEDULER (defaults ON).
+# guarded separately by VIBE_TRADING_ENABLE_SCHEDULER.
 
 
 _SCHEDULED_RESEARCH_SCHEDULER_ENV = "VIBE_TRADING_ENABLE_SCHEDULER"
@@ -3650,18 +3596,8 @@ def _get_scheduled_research_store() -> "ScheduledResearchJobStore":
 
 
 def _scheduled_research_scheduler_enabled() -> bool:
-    """Return whether scheduled research execution is enabled.
-
-    Honours an explicit ``VIBE_TRADING_ENABLE_SCHEDULER`` env var.
-    When unset, defaults to *True* — the executor is a passive loop
-    that only fires when there are pending jobs, so the cost of
-    leaving it on is negligible and avoids the hidden-foot-gun.
-    """
-    explicit = os.getenv(_SCHEDULED_RESEARCH_SCHEDULER_ENV)
-    if explicit is not None:
-        return explicit.strip().lower() in _SCHEDULED_RESEARCH_TRUE_VALUES
-    # Default ON — no jobs means no work, no risk.
-    return True
+    """Return whether scheduled research execution is enabled."""
+    return os.getenv(_SCHEDULED_RESEARCH_SCHEDULER_ENV, "").strip().lower() in _SCHEDULED_RESEARCH_TRUE_VALUES
 
 
 async def _dispatch_scheduled_research_job(job: "ScheduledResearchJob") -> None:
