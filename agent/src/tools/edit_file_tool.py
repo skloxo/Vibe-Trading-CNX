@@ -9,7 +9,7 @@ from typing import Any
 from src.agent.tools import BaseTool
 from src.tools.path_utils import safe_path as _safe_path
 from src.tools.path_utils import safe_run_dir as _safe_run_dir
-from src.tools.path_utils import _allowed_file_roots
+from src.tools.path_utils import allowed_file_roots
 from src.tools.redaction import redact_internal_paths
 
 
@@ -47,7 +47,7 @@ class EditFileTool(BaseTool):
         if not run_dir:
             # Allow edit if path resolves inside a configured extra file root
             candidate = Path(file_path).expanduser().resolve()
-            for extra_root in _allowed_file_roots():
+            for extra_root in allowed_file_roots():
                 if candidate.is_relative_to(extra_root):
                     resolved = candidate
                     break
@@ -66,7 +66,7 @@ class EditFileTool(BaseTool):
             except ValueError as exc:
                 # Fallback: check if path resolves inside a configured extra file root
                 candidate = Path(file_path).expanduser().resolve()
-                for extra_root in _allowed_file_roots():
+                for extra_root in allowed_file_roots():
                     if candidate.is_relative_to(extra_root):
                         resolved = candidate
                         break

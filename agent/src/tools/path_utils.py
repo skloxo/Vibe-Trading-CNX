@@ -113,7 +113,7 @@ def _default_run_roots() -> list[Path]:
     ]
 
 
-def _allowed_file_roots() -> list[Path]:
+def allowed_file_roots() -> list[Path]:
     """Return all roots allowed for document and broker-file reads."""
     roots: list[Path] = []
     for root in [*_default_file_roots(), *_configured_file_roots()]:
@@ -178,7 +178,7 @@ def _safe_import_path(p: str, *, purpose: str) -> Path:
     _rejects_unc(p)
     resolved = _import_candidate(p)
 
-    for root in _allowed_file_roots():
+    for root in allowed_file_roots():
         if resolved.is_relative_to(root):
             return resolved
 
