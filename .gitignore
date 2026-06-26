@@ -99,6 +99,9 @@ screener_*.json
 final_picks.csv
 *.bak
 
+# Reference folders
+雪球小工具/
+
 # Local DB
 agent/stocks.db
 
