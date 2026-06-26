@@ -16,7 +16,7 @@
 </p>
 
 > [!NOTE]
-> 本项目是 [Vibe-Trading](https://github.com/HKUDS/Vibe-Trading) 的定制化分支版本，专门针对 **A股和港股** 市场进行了深度适配与功能清理。移除了美股、加密货币与外汇等境外市场依赖，集成了深度中文本地化、免 Token 行情源（如 Tencent/Baostock）、飞书消息通道、本地 credentials 凭证沙箱防护以及定制化的双子代理（开发/测试）协同测试与交付验收标准作业程序（SOP）。
+> 本项目是 [Vibe-Trading](https://github.com/HKUDS/Vibe-Trading) 的高级定制分支版本（超集）。在深度整合 **A股和港股** 市场专属特性（如飞书多通道推送、中文 Web UI、A股题材复盘方法论等）的同时，**彻底恢复并加固了全部全球境外市场（美股、加密货币、外汇、期货）与 10 大券商连接器（OKX, Binance, Alpaca, IBKR 等）的代码与回测测试**，并实现了多租户安全沙箱隔离机制（限制于租户私有目录且常规租户强制关闭 BashTool 以防提权与目录遍历逃逸）与基于 Host 请求头的局域网自动安全提权，跑通 100% 单元与安全测试。
 
 <p align="center">
   <a href="#-news">新闻公告</a> &nbsp;&middot;&nbsp;

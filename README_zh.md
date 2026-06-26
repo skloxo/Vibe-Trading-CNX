@@ -162,11 +162,12 @@
   <tr>
     <td align="center" width="50%" valign="top">
       <img src="assets/feature-cross-market-data-backtesting.png" height="130" alt="Cross-market data and backtesting"/><br>
-      <h3>📊 跨市场数据与回测</h3>
+      <h3>📊 全球市场数据与回测</h3>
       <div align="left">
-        • A 股、港股、美股、加密、期货与外汇<br>
-        • 数据 fallback 与组合回测<br>
-        • PIT 数据、验证与 run cards
+        • <b>全球覆盖</b>：A 股、港股、美股、加密货币、期货与外汇<br>
+        • <b>券商完整</b>：10 个券商连接器（OKX, Binance, Alpaca, IBKR 等）全部可用并加固<br>
+        • 多层数据 fallback 与跨市场组合回测<br>
+        • PIT 数据、验证 artifacts 与 run cards
       </div>
     </td>
     <td align="center" width="50%" valign="top">
