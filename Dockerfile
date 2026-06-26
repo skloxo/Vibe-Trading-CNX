@@ -1,13 +1,13 @@
 # ============================================================================
-# Stage 1: Build frontend (Skipped, using prebuilt host files)
+# Stage 1: Build frontend
 # ============================================================================
-# FROM node:20-slim AS frontend-build
-# 
-# WORKDIR /app/frontend
-# COPY frontend/package.json frontend/package-lock.json ./
-# RUN npm ci --ignore-scripts
-# COPY frontend/ ./
-# RUN npm run build
+FROM node:20-slim AS frontend-build
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY frontend/ ./
+RUN npm run build
 
 # ============================================================================
 # Stage 2: Python runtime
@@ -49,7 +49,7 @@ COPY pyproject.toml LICENSE README.md ./
 COPY agent/ agent/
 
 # Copy built frontend
-COPY frontend/dist frontend/dist
+COPY --from=frontend-build /app/frontend/dist frontend/dist
 
 # Install CLI entrypoint
 RUN pip install --no-cache-dir -e .
