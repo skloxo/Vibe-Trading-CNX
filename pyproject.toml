@@ -95,7 +95,7 @@ include = ["src*", "backtest*", "cli*"]
 
 [project.optional-dependencies]
 ibkr = [
-    "ib_async>=2.0",
+    "ib_async>=2.1.0",
 ]
 deepseek = [
     "langchain-deepseek>=1.0.0,<2",
