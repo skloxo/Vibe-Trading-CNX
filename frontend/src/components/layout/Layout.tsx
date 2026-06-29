@@ -11,7 +11,7 @@ import { AuthBarrier } from "@/components/layout/AuthBarrier";
 import { setApiAuthKey } from "@/lib/apiAuth";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.10.cnx.1.1";
+const APP_VERSION = "v0.1.10.cnx.1.2";
 
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
