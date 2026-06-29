@@ -2976,7 +2976,7 @@ async def get_wechat_transient_status(temp_id: str):
 
         import httpx
         try:
-            async with httpx.AsyncClient(timeout=36) as client:
+            async with httpx.AsyncClient(timeout=10) as client:
                 res = await client.get(
                     f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
                 )
@@ -3087,7 +3087,7 @@ async def get_wechat_channel_status(channel_id: str):
     
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=36) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(
                 f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
             )
