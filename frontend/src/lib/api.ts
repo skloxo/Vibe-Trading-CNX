@@ -396,11 +396,7 @@ export interface UpdateFeishuChannelRequest {
 export interface WechatChannel {
   id: string;
   name: string;
-  mode: string; // "wecom" | "ilink"
-  wecom_webhook: string;
-  wecom_corpid: string;
-  wecom_secret_configured: boolean;
-  wecom_agentid: string;
+  mode: string; // "ilink"
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;
@@ -411,10 +407,6 @@ export interface WechatChannel {
 export interface CreateWechatChannelRequest {
   name: string;
   mode: string;
-  wecom_webhook?: string;
-  wecom_corpid?: string;
-  wecom_secret?: string;
-  wecom_agentid?: string;
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;
@@ -425,10 +417,6 @@ export interface CreateWechatChannelRequest {
 export interface UpdateWechatChannelRequest {
   name: string;
   mode: string;
-  wecom_webhook?: string;
-  wecom_corpid?: string;
-  wecom_secret?: string;
-  wecom_agentid?: string;
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;

@@ -34,27 +34,7 @@ def test_wechat_crud_endpoints(client: TestClient) -> None:
     assert res.status_code == 200
     assert res.json() == []
     
-    # 2. Create channel (WeCom)
-    res = client.post(
-        "/settings/platforms/wechat/channels",
-        json={
-            "name": "WeCom Test",
-            "mode": "wecom",
-            "wecom_webhook": "https://qyapi.weixin.qq.com/...webhook",
-            "wecom_corpid": "wwcorp123",
-            "wecom_secret": "mysecret",
-            "wecom_agentid": "10002",
-            "enabled": True
-        }
-    )
-    assert res.status_code == 200
-    body = res.json()
-    assert body["name"] == "WeCom Test"
-    assert body["mode"] == "wecom"
-    assert body["wecom_secret_configured"] is True
-    chan_id = body["id"]
-    
-    # 3. Create channel (iLink)
+    # 2. Create channel (iLink)
     res = client.post(
         "/settings/platforms/wechat/channels",
         json={
@@ -70,38 +50,32 @@ def test_wechat_crud_endpoints(client: TestClient) -> None:
     assert body_ilink["ilink_bot_token"] == ""
     chan_id_ilink = body_ilink["id"]
     
-    # 4. List channels again (should have 2 channels)
+    # 3. List channels again (should have 1 channel)
     res = client.get("/settings/platforms/wechat/channels")
     assert res.status_code == 200
     channels = res.json()
-    assert len(channels) == 2
+    assert len(channels) == 1
     
-    # 5. Update channel
+    # 4. Update channel
     res = client.put(
-        f"/settings/platforms/wechat/channels/{chan_id}",
+        f"/settings/platforms/wechat/channels/{chan_id_ilink}",
         json={
-            "name": "WeCom Updated",
-            "mode": "wecom",
-            "wecom_webhook": "https://qyapi.weixin.qq.com/...webhook2",
-            "wecom_corpid": "wwcorp123",
-            "wecom_agentid": "10002",
-            "enabled": False
+            "name": "iLink Updated",
+            "mode": "ilink",
+            "enabled": False,
+            "ilink_bot_token": "updated-token"
         }
     )
     assert res.status_code == 200
     body = res.json()
-    assert body["name"] == "WeCom Updated"
+    assert body["name"] == "iLink Updated"
     assert body["enabled"] is False
-    assert body["wecom_secret_configured"] is True
+    assert body["ilink_bot_token"] == "updated-token"
     
-    # 6. Delete channel
-    res = client.delete(f"/settings/platforms/wechat/channels/{chan_id}")
-    assert res.status_code == 200
-    assert res.json() == {"status": "success"}
-    
-    # Clean up iLink channel
+    # 5. Delete channel
     res = client.delete(f"/settings/platforms/wechat/channels/{chan_id_ilink}")
     assert res.status_code == 200
+    assert res.json() == {"status": "success"}
 
 
 def test_wechat_ilink_auth_flow(client: TestClient) -> None:
@@ -166,29 +140,10 @@ def test_wechat_ilink_auth_flow(client: TestClient) -> None:
 
 @pytest.mark.anyio
 async def test_wechat_adapter_message_sending():
-    # Test WechatAdapter direct message sending logic (WeCom Webhook)
-    adapter = WechatAdapter(
-        channel_id="chan_test",
-        name="Test WeChat",
-        mode="wecom",
-        wecom_webhook="https://mockwebhook.local/key"
-    )
-    
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.raise_for_status = MagicMock()
-    
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_response
-        msg_id = await adapter.send_message(chat_id="user123", content="Hello", title="Alert")
-        assert msg_id == "wecom_webhook_msg_200"
-        mock_post.assert_called_once()
-        
     # Test iLink sending mode
     adapter_il = WechatAdapter(
         channel_id="chan_test",
         name="Test WeChat",
-        mode="ilink",
         ilink_bot_token="my_token",
         ilink_base_url="https://base.ilink.local"
     )

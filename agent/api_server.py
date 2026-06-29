@@ -399,11 +399,7 @@ class WechatChannelResponse(BaseModel):
     """Detailed information for a single WeChat channel."""
     id: str
     name: str
-    mode: str  # "wecom" or "ilink"
-    wecom_webhook: str
-    wecom_corpid: str
-    wecom_secret_configured: bool
-    wecom_agentid: str
+    mode: str = "ilink"
     enabled: bool
     ilink_bot_token: Optional[str] = ""
     ilink_base_url: Optional[str] = ""
@@ -414,11 +410,7 @@ class WechatChannelResponse(BaseModel):
 class CreateWechatChannelRequest(BaseModel):
     """Payload to create a new WeChat channel."""
     name: str
-    mode: str  # "wecom" or "ilink"
-    wecom_webhook: Optional[str] = ""
-    wecom_corpid: Optional[str] = ""
-    wecom_secret: Optional[str] = ""
-    wecom_agentid: Optional[str] = ""
+    mode: str = "ilink"
     enabled: bool = True
     ilink_bot_token: Optional[str] = ""
     ilink_base_url: Optional[str] = ""
@@ -429,11 +421,7 @@ class CreateWechatChannelRequest(BaseModel):
 class UpdateWechatChannelRequest(BaseModel):
     """Payload to update an existing WeChat channel."""
     name: str
-    mode: str  # "wecom" or "ilink"
-    wecom_webhook: Optional[str] = ""
-    wecom_corpid: Optional[str] = ""
-    wecom_secret: Optional[str] = None
-    wecom_agentid: Optional[str] = ""
+    mode: str = "ilink"
     enabled: bool = True
     ilink_bot_token: Optional[str] = None
     ilink_base_url: Optional[str] = None
@@ -1011,11 +999,6 @@ async def _reload_platform_manager() -> None:
                             w_adapter = WechatAdapter(
                                 channel_id=wchan["id"],
                                 name=wchan["name"],
-                                mode=wchan["mode"],
-                                wecom_webhook=wchan.get("wecom_webhook", ""),
-                                wecom_corpid=wchan.get("wecom_corpid", ""),
-                                wecom_secret=wchan.get("wecom_secret", ""),
-                                wecom_agentid=wchan.get("wecom_agentid", ""),
                                 ilink_bot_token=wchan.get("ilink_bot_token", ""),
                                 ilink_base_url=wchan.get("ilink_base_url", ""),
                                 ilink_bot_id=wchan.get("ilink_bot_id", ""),
@@ -2715,7 +2698,6 @@ async def delete_feishu_channel(channel_id: str):
     return {"status": "success"}
 
 
-WECHAT_SECRET_PLACEHOLDERS: set[str] = {"", "your-wecom-secret"}
 active_ilink_logins: dict[str, dict] = {}
 
 
@@ -2731,11 +2713,7 @@ async def list_wechat_channels():
         WechatChannelResponse(
             id=c["id"],
             name=c["name"],
-            mode=c["mode"],
-            wecom_webhook=c.get("wecom_webhook", ""),
-            wecom_corpid=c.get("wecom_corpid", ""),
-            wecom_secret_configured=bool(c.get("wecom_secret")) and c.get("wecom_secret") not in WECHAT_SECRET_PLACEHOLDERS,
-            wecom_agentid=c.get("wecom_agentid", ""),
+            mode="ilink",
             enabled=c.get("enabled", True),
             ilink_bot_token=c.get("ilink_bot_token", ""),
             ilink_base_url=c.get("ilink_base_url", ""),
@@ -2760,11 +2738,7 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
     new_channel = {
         "id": new_id,
         "name": payload.name.strip() or f"微信通道_{new_id[:4]}",
-        "mode": payload.mode.strip(),
-        "wecom_webhook": (payload.wecom_webhook or "").strip(),
-        "wecom_corpid": (payload.wecom_corpid or "").strip(),
-        "wecom_secret": (payload.wecom_secret or "").strip(),
-        "wecom_agentid": (payload.wecom_agentid or "").strip(),
+        "mode": "ilink",
         "enabled": payload.enabled,
         "ilink_bot_token": (payload.ilink_bot_token or "").strip(),
         "ilink_base_url": (payload.ilink_base_url or "https://ilinkai.weixin.qq.com").strip(),
@@ -2777,7 +2751,7 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
     
     await _reload_platform_manager()
     
-    if payload.mode.strip() == "ilink" and payload.enabled and new_channel["ilink_user_id"]:
+    if payload.enabled and new_channel["ilink_user_id"]:
         from src.config.paths import active_tenant_var
         tid = active_tenant_var.get() or "default"
         adapter_key = f"wechat_{tid}_{new_channel['id']}"
@@ -2799,11 +2773,7 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
     return WechatChannelResponse(
         id=new_channel["id"],
         name=new_channel["name"],
-        mode=new_channel["mode"],
-        wecom_webhook=new_channel["wecom_webhook"],
-        wecom_corpid=new_channel["wecom_corpid"],
-        wecom_secret_configured=bool(new_channel["wecom_secret"]) and new_channel["wecom_secret"] not in WECHAT_SECRET_PLACEHOLDERS,
-        wecom_agentid=new_channel["wecom_agentid"],
+        mode="ilink",
         enabled=new_channel["enabled"],
         ilink_bot_token=new_channel["ilink_bot_token"],
         ilink_base_url=new_channel["ilink_base_url"],
@@ -2831,19 +2801,9 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
         
     c = channels[target_idx]
     c["name"] = payload.name.strip()
-    c["mode"] = payload.mode.strip()
-    c["wecom_webhook"] = (payload.wecom_webhook or "").strip()
-    c["wecom_corpid"] = (payload.wecom_corpid or "").strip()
-    c["wecom_agentid"] = (payload.wecom_agentid or "").strip()
+    c["mode"] = "ilink"
     c["enabled"] = payload.enabled
     
-    if payload.wecom_secret is not None:
-        wecom_secret = payload.wecom_secret.strip()
-        if wecom_secret and wecom_secret not in WECHAT_SECRET_PLACEHOLDERS:
-            c["wecom_secret"] = wecom_secret
-        elif wecom_secret == "":
-            c["wecom_secret"] = ""
-            
     old_token = c.get("ilink_bot_token", "")
     old_user_id = c.get("ilink_user_id", "")
     old_enabled = c.get("enabled", False)
@@ -2865,7 +2825,7 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
     user_id_changed = (payload.ilink_user_id is not None and payload.ilink_user_id.strip() != old_user_id)
     enabled_changed = (payload.enabled != old_enabled)
 
-    if c["mode"] == "ilink" and c["enabled"] and c["ilink_user_id"] and (token_changed or user_id_changed or (enabled_changed and c["enabled"])):
+    if c["enabled"] and c["ilink_user_id"] and (token_changed or user_id_changed or (enabled_changed and c["enabled"])):
         from src.config.paths import active_tenant_var
         tid = active_tenant_var.get() or "default"
         adapter_key = f"wechat_{tid}_{c['id']}"
@@ -2887,11 +2847,7 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
     return WechatChannelResponse(
         id=c["id"],
         name=c["name"],
-        mode=c["mode"],
-        wecom_webhook=c["wecom_webhook"],
-        wecom_corpid=c["wecom_corpid"],
-        wecom_secret_configured=bool(c.get("wecom_secret")) and c["wecom_secret"] not in WECHAT_SECRET_PLACEHOLDERS,
-        wecom_agentid=c["wecom_agentid"],
+        mode="ilink",
         enabled=c["enabled"],
         ilink_bot_token=c.get("ilink_bot_token", ""),
         ilink_base_url=c.get("ilink_base_url", ""),
@@ -3039,42 +2995,38 @@ async def get_wechat_channel_qrcode(channel_id: str):
     if not channel:
         raise HTTPException(status_code=404, detail="微信通道不存在")
         
-    mode = channel.get("mode", "wecom")
-    if mode == "ilink":
-        import httpx
-        import time
-        
-        token = channel.get("ilink_bot_token", "").strip()
-        local_tokens = [token] if token else []
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.post(
-                    "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3",
-                    json={"local_token_list": local_tokens},
-                    timeout=10,
-                )
-                res.raise_for_status()
-                data = res.json()
-            qrcode = data.get("qrcode")
-            qrcode_img_content = data.get("qrcode_img_content")
-            if qrcode and qrcode_img_content:
-                active_ilink_logins[channel_id] = {
-                    "qrcode": qrcode,
-                    "qrcode_url": qrcode_img_content,
-                    "started_at": time.time(),
-                    "api_base_url": "https://ilinkai.weixin.qq.com",
-                }
-                import urllib.parse
-                qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote_plus(qrcode_img_content)}"
-                return {"status": "waiting", "qrcode": qr_image_url}
-            else:
-                raise HTTPException(status_code=500, detail="微信 iLink 官方网关返回空数据，请稍后重试。")
-        except Exception as e:
-            logger.warning("Failed to fetch official iLink QR code: %s", e)
-            raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}")
-            
-    raise HTTPException(status_code=400, detail="该通道不支持获取网页扫码，请通过配置界面扫码。")
+    import httpx
+    import time
+    
+    token = channel.get("ilink_bot_token", "").strip()
+    local_tokens = [token] if token else []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3",
+                json={"local_token_list": local_tokens},
+                timeout=10,
+            )
+            res.raise_for_status()
+            data = res.json()
+        qrcode = data.get("qrcode")
+        qrcode_img_content = data.get("qrcode_img_content")
+        if qrcode and qrcode_img_content:
+            active_ilink_logins[channel_id] = {
+                "qrcode": qrcode,
+                "qrcode_url": qrcode_img_content,
+                "started_at": time.time(),
+                "api_base_url": "https://ilinkai.weixin.qq.com",
+            }
+            import urllib.parse
+            qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote_plus(qrcode_img_content)}"
+            return {"status": "waiting", "qrcode": qr_image_url}
+        else:
+            raise HTTPException(status_code=500, detail="微信 iLink 官方网关返回空数据，请稍后重试。")
+    except Exception as e:
+        logger.warning("Failed to fetch official iLink QR code: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}")
 
 
 @app.get(
@@ -3088,86 +3040,84 @@ async def get_wechat_channel_status(channel_id: str):
     if not channel:
         raise HTTPException(status_code=404, detail="WeChat channel not found")
         
-    mode = channel.get("mode", "wecom")
-    if mode == "ilink":
-        login_context = active_ilink_logins.get(channel_id)
-        if not login_context:
-            return {"status": "waiting"}
-            
-        qrcode = login_context["qrcode"]
-        api_base_url = login_context.get("api_base_url", "https://ilinkai.weixin.qq.com")
+    login_context = active_ilink_logins.get(channel_id)
+    if not login_context:
+        return {"status": "waiting"}
         
-        import httpx
-        try:
-            async with httpx.AsyncClient(timeout=36) as client:
-                res = await client.get(
-                    f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
-                )
-                res.raise_for_status()
-                data = res.json()
-        except Exception as e:
-            logger.warning("Failed to poll official iLink QR status: %s", e)
-            return {"status": "waiting"}
+    qrcode = login_context["qrcode"]
+    api_base_url = login_context.get("api_base_url", "https://ilinkai.weixin.qq.com")
+    
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=36) as client:
+            res = await client.get(
+                f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
+            )
+            res.raise_for_status()
+            data = res.json()
+    except Exception as e:
+        logger.warning("Failed to poll official iLink QR status: %s", e)
+        return {"status": "waiting"}
 
-        try:
-            status = data.get("status")
-            if status == "scaned_but_redirect" and data.get("redirect_host"):
-                new_host = f"https://{data.get('redirect_host')}"
-                login_context["api_base_url"] = new_host
-                return {"status": "scanned"}
-            elif status == "wait":
-                return {"status": "waiting"}
-            elif status == "scaned":
-                return {"status": "scanned"}
-            elif status == "expired":
-                return {"status": "expired"}
-            elif status in ("confirmed", "binded_redirect"):
-                bot_token = data.get("bot_token")
-                baseurl = data.get("baseurl") or api_base_url
-                ilink_bot_id = data.get("ilink_bot_id")
-                ilink_user_id = data.get("ilink_user_id")
-                
-                for c in channels:
-                    if c["id"] == channel_id:
-                        if bot_token:
-                            c["ilink_bot_token"] = bot_token
-                        if baseurl:
-                            c["ilink_base_url"] = baseurl
-                        if ilink_bot_id:
-                            c["ilink_bot_id"] = ilink_bot_id
-                        if ilink_user_id:
-                            c["ilink_user_id"] = ilink_user_id
-                        c["enabled"] = True
-                        break
-                _save_wechat_channels(channels)
-                active_ilink_logins.pop(channel_id, None)
-                
-                await _reload_platform_manager()
-                
-                if ilink_user_id:
-                    from src.config.paths import active_tenant_var
-                    tid = active_tenant_var.get() or "default"
-                    adapter_key = f"wechat_{tid}_{channel_id}"
-                    if _platform_manager and adapter_key in _platform_manager._adapters:
-                        adapter = _platform_manager._adapters[adapter_key]
-                        welcome_msg = "你好，我是量化金融研究助手，我已经成功接收到您的消息并连接成功。"
-                        
-                        async def _send_welcome():
-                            try:
-                                # Sleep briefly to make sure the poller loop has fully started and registered the adapter
-                                await asyncio.sleep(1.5)
-                                await adapter.send_message(ilink_user_id, welcome_msg)
-                                logger.warning(f"[WeChat iLink] Sent proactive welcome message to {ilink_user_id}")
-                            except Exception as ex:
-                                import traceback
-                                logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\n{traceback.format_exc()}")
-                                
-                        asyncio.create_task(_send_welcome())
-                        
-                return {"status": "logged_in"}
-        except Exception as e:
-            logger.warning("Failed to process official iLink QR status data: %s", e)
+    try:
+        status = data.get("status")
+        if status == "scaned_but_redirect" and data.get("redirect_host"):
+            new_host = f"https://{data.get('redirect_host')}"
+            login_context["api_base_url"] = new_host
+            return {"status": "scanned"}
+        elif status == "wait":
             return {"status": "waiting"}
+        elif status == "scaned":
+            return {"status": "scanned"}
+        elif status == "expired":
+            return {"status": "expired"}
+        elif status in ("confirmed", "binded_redirect"):
+            bot_token = data.get("bot_token")
+            baseurl = data.get("baseurl") or api_base_url
+            ilink_bot_id = data.get("ilink_bot_id")
+            ilink_user_id = data.get("ilink_user_id")
+            
+            for c in channels:
+                if c["id"] == channel_id:
+                    if bot_token:
+                        c["ilink_bot_token"] = bot_token
+                    if baseurl:
+                        c["ilink_base_url"] = baseurl
+                    if ilink_bot_id:
+                        c["ilink_bot_id"] = ilink_bot_id
+                    if ilink_user_id:
+                        c["ilink_user_id"] = ilink_user_id
+                    c["enabled"] = True
+                    break
+            _save_wechat_channels(channels)
+            active_ilink_logins.pop(channel_id, None)
+            
+            await _reload_platform_manager()
+            
+            if ilink_user_id:
+                from src.config.paths import active_tenant_var
+                tid = active_tenant_var.get() or "default"
+                adapter_key = f"wechat_{tid}_{channel_id}"
+                if _platform_manager and adapter_key in _platform_manager._adapters:
+                    adapter = _platform_manager._adapters[adapter_key]
+                    welcome_msg = "你好，我是量化金融研究助手，我已经成功接收到您的消息并连接成功。"
+                    
+                    async def _send_welcome():
+                        try:
+                            # Sleep briefly to make sure the poller loop has fully started and registered the adapter
+                            await asyncio.sleep(1.5)
+                            await adapter.send_message(ilink_user_id, welcome_msg)
+                            logger.warning(f"[WeChat iLink] Sent proactive welcome message to {ilink_user_id}")
+                        except Exception as ex:
+                            import traceback
+                            logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\\n{traceback.format_exc()}")
+                            
+                    asyncio.create_task(_send_welcome())
+                    
+            return {"status": "logged_in"}
+    except Exception as e:
+        logger.warning("Failed to process official iLink QR status data: %s", e)
+        return {"status": "waiting"}
     return {"status": "waiting"}
 
 

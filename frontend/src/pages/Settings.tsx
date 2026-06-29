@@ -69,12 +69,8 @@ export function Settings() {
 
   // Form states for WeChat modal
   const [wechatChanName, setWechatChanName] = useState("");
-  const [wechatChanMode, setWechatChanMode] = useState("wecom"); // "wecom" or "ilink"
+  const [wechatChanMode, setWechatChanMode] = useState("ilink"); // "ilink"
   const [wechatChanEnabled, setWechatChanEnabled] = useState(true);
-  const [wechatWecomWebhook, setWechatWecomWebhook] = useState("");
-  const [wechatWecomCorpid, setWechatWecomCorpid] = useState("");
-  const [wechatWecomSecret, setWechatWecomSecret] = useState("");
-  const [wechatWecomAgentid, setWechatWecomAgentid] = useState("");
   const [wechatIlinkBotToken, setWechatIlinkBotToken] = useState("");
   const [wechatIlinkBaseUrl, setWechatIlinkBaseUrl] = useState("");
   const [wechatSaving, setWechatSaving] = useState(false);
@@ -426,12 +422,8 @@ export function Settings() {
   const openWechatAddModal = () => {
     setEditingWechatChannel(null);
     setWechatChanName("");
-    setWechatChanMode("wecom");
+    setWechatChanMode("ilink");
     setWechatChanEnabled(true);
-    setWechatWecomWebhook("");
-    setWechatWecomCorpid("");
-    setWechatWecomSecret("");
-    setWechatWecomAgentid("");
     setWechatIlinkBotToken("");
     setWechatIlinkBaseUrl("");
     
@@ -449,10 +441,6 @@ export function Settings() {
     setWechatChanName(channel.name);
     setWechatChanMode(channel.mode);
     setWechatChanEnabled(channel.enabled);
-    setWechatWecomWebhook(channel.wecom_webhook || "");
-    setWechatWecomCorpid(channel.wecom_corpid || "");
-    setWechatWecomSecret("");
-    setWechatWecomAgentid(channel.wecom_agentid || "");
     setWechatIlinkBotToken(channel.ilink_bot_token || "");
     setWechatIlinkBaseUrl(channel.ilink_base_url || "");
     
@@ -473,10 +461,6 @@ export function Settings() {
         const updated = await api.updateWechatChannel(editingWechatChannel.id, {
           name: wechatChanName.trim(),
           mode: wechatChanMode,
-          wecom_webhook: wechatWecomWebhook.trim(),
-          wecom_corpid: wechatWecomCorpid.trim(),
-          wecom_secret: wechatWecomSecret.trim() || undefined,
-          wecom_agentid: wechatWecomAgentid.trim(),
           ilink_bot_token: wechatIlinkBotToken.trim(),
           ilink_base_url: wechatIlinkBaseUrl.trim(),
           ilink_bot_id: retrievedBotId.trim(),
@@ -489,10 +473,6 @@ export function Settings() {
         const created = await api.createWechatChannel({
           name: wechatChanName.trim(),
           mode: wechatChanMode,
-          wecom_webhook: wechatWecomWebhook.trim(),
-          wecom_corpid: wechatWecomCorpid.trim(),
-          wecom_secret: wechatWecomSecret.trim(),
-          wecom_agentid: wechatWecomAgentid.trim(),
           ilink_bot_token: wechatIlinkBotToken.trim(),
           ilink_base_url: wechatIlinkBaseUrl.trim(),
           ilink_bot_id: retrievedBotId.trim(),
@@ -516,10 +496,6 @@ export function Settings() {
       const updated = await api.updateWechatChannel(channel.id, {
         name: channel.name,
         mode: channel.mode,
-        wecom_webhook: channel.wecom_webhook,
-        wecom_corpid: channel.wecom_corpid,
-        wecom_secret: undefined,
-        wecom_agentid: channel.wecom_agentid,
         ilink_bot_token: channel.ilink_bot_token,
         enabled: !channel.enabled,
       });
@@ -1379,7 +1355,7 @@ export function Settings() {
                   <MessageSquare className="h-4 w-4 text-primary" />
                   <h2 className="text-base font-semibold">微信通道设置</h2>
                 </div>
-                <p className="text-xs text-muted-foreground">配置个人微信（iLink）或企业微信（WeCom）消息推送通道</p>
+                <p className="text-xs text-muted-foreground">配置个人微信（iLink）消息推送通道</p>
               </div>
               <button
                 type="button"
@@ -1411,35 +1387,19 @@ export function Settings() {
                             {channel.enabled ? "Active" : "Disabled"}
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium">
-                            {channel.mode === "wecom" ? "企业微信" : "官方微信机器人 (iLink)"}
+                            官方微信机器人 (iLink)
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-mono">
-                          {channel.mode === "wecom" ? (
+                          {channel.ilink_bot_id && <span>Bot ID: {channel.ilink_bot_id}</span>}
+                          {channel.ilink_user_id && (
                             <>
-                              {channel.wecom_webhook && <span>Webhook: {channel.wecom_webhook.substring(0, 30)}...</span>}
-                              {channel.wecom_corpid && (
-                                <>
-                                  <span>•</span>
-                                  <span>Corp ID: {channel.wecom_corpid}</span>
-                                </>
-                              )}
                               <span>•</span>
-                              <span>Secret: {channel.wecom_secret_configured ? "••••••••" : "Not Configured"}</span>
-                            </>
-                          ) : (
-                            <>
-                              {channel.ilink_bot_id && <span>Bot ID: {channel.ilink_bot_id}</span>}
-                              {channel.ilink_user_id && (
-                                <>
-                                  <span>•</span>
-                                  <span>Admin: {channel.ilink_user_id}</span>
-                                </>
-                              )}
-                              <span>•</span>
-                              <span>Status: {channel.ilink_bot_token ? "已扫码登录" : "未授权"}</span>
+                              <span>Admin: {channel.ilink_user_id}</span>
                             </>
                           )}
+                          <span>•</span>
+                          <span>Status: {channel.ilink_bot_token ? "已扫码登录" : "未授权"}</span>
                         </div>
                       </div>
                       
@@ -2086,75 +2046,6 @@ export function Settings() {
                   placeholder="e.g. 个人微信通道"
                 />
               </label>
-
-              <label className="grid gap-1.5">
-                <span className={labelClass}>通道模式</span>
-                <select
-                  value={wechatChanMode}
-                  onChange={(e) => setWechatChanMode(e.target.value)}
-                  className={fieldClass}
-                >
-                  <option value="wecom">企业微信 (WeCom)</option>
-                  <option value="ilink">官方微信机器人 (iLink)</option>
-                </select>
-              </label>
-
-              {wechatChanMode === "wecom" && (
-                <>
-                  <label className="grid gap-1.5">
-                    <span className={labelClass}>Webhook URL (可选)</span>
-                    <input
-                      type="text"
-                      value={wechatWecomWebhook}
-                      onChange={(e) => setWechatWecomWebhook(e.target.value)}
-                      className={fieldClass}
-                      placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-                    />
-                  </label>
-
-                  <label className="grid gap-1.5">
-                    <span className={labelClass}>Corp ID</span>
-                    <input
-                      type="text"
-                      value={wechatWecomCorpid}
-                      onChange={(e) => setWechatWecomCorpid(e.target.value)}
-                      className={fieldClass}
-                      placeholder="wwxxxxxxxxxxxxxxxx"
-                    />
-                  </label>
-
-                  <label className="grid gap-1.5">
-                    <span className={labelClass}>Agent ID</span>
-                    <input
-                      type="text"
-                      value={wechatWecomAgentid}
-                      onChange={(e) => setWechatWecomAgentid(e.target.value)}
-                      className={fieldClass}
-                      placeholder="1000002"
-                    />
-                  </label>
-
-                  <label className="grid gap-1.5">
-                    <span className={labelClass}>App Secret</span>
-                    <div className="relative">
-                      <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <input
-                        type="password"
-                        required={!editingWechatChannel}
-                        value={wechatWecomSecret}
-                        onChange={(e) => setWechatWecomSecret(e.target.value)}
-                        className={`${fieldClass} pl-9`}
-                        placeholder={
-                          editingWechatChannel && editingWechatChannel.wecom_secret_configured
-                            ? i18n.t("settings.configured")
-                            : "WeCom Secret"
-                        }
-                        autoComplete="new-password"
-                      />
-                    </div>
-                  </label>
-                </>
-              )}
 
               {wechatChanMode === "ilink" && (
                 <div className="space-y-4">
