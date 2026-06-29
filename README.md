@@ -128,50 +128,18 @@
 
 ## ✨ 核心功能
 
-<div align="center">
-<table align="center" width="94%" style="width:94%; margin-left:auto; margin-right:auto;">
-  <tr>
-    <td align="center" width="50%" valign="top">
-      <img src="assets/feature-self-improving-trading-agent.png" height="130" alt="Self-improving trading agent"/><br>
-      <h3>🔍 自我改进的交易智能体</h3>
-      <div align="left">
-        • 自然语言市场研究<br>
-        • 策略草稿与文件/网页分析<br>
-        • 由记忆驱动的研究工作流
-      </div>
-    </td>
-    <td align="center" width="50%" valign="top">
-      <img src="assets/feature-multi-agent-trading-teams.png" height="130" alt="Multi-agent trading teams"/><br>
-      <h3>🐝 多智能体交易团队</h3>
-      <div align="left">
-        • 投资、量化、加密与风控团队<br>
-        • 流式进度与持久化报告<br>
-        • Worker 基于已获取的市场数据展开分析
-      </div>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%" valign="top">
-      <img src="assets/feature-cross-market-data-backtesting.png" height="130" alt="Cross-market data and backtesting"/><br>
-      <h3>📊 跨市场数据与回测</h3>
-      <div align="left">
-        • A 股、港股、美股、加密、期货与外汇<br>
-        • 数据 fallback 与组合回测<br>
-        • PIT 数据、验证与 run cards
-      </div>
-    </td>
-    <td align="center" width="50%" valign="top">
-      <img src="assets/feature-shadow-account.png" height="130" alt="Shadow Account"/><br>
-      <h3>👥 Shadow Account</h3>
-      <div align="left">
-        • 券商交易日志行为诊断<br>
-        • 基于规则的 Shadow Account 对比<br>
-        • 可导出的审计报告与策略代码
-      </div>
-    </td>
-  </tr>
-</table>
-</div>
+🎯 **聚焦 A股与港股**，深度定制，而非泛化全球市场的通用工具
+
+| 功能模块 | 描述 |
+|----------|------|
+| 🧠 **自然语言驱动研究** | 用中文对话驱动投研工作流：分析个股、回测策略、解读财报、挖掘题材，无需写代码 |
+| 📡 **多维市场特征提取** | 同步抓取**情绪面**（雪球大V舆情）、**资金面**（大单龙虎榜）、**技术面**（指标形态）、**基本面**（财报题材）四维立体信号 |
+| 🤖 **多智能体分析团队** | 29 个预置 Swarm 团队（投资委员会、量化台、技术分析团、风控审计等），多 Agent 协同辩论出研究共识 |
+| 📲 **多通道即时推送** | 微信个人号（iLink）/ 飞书机器人即插即用，策略信号与研究简报实时直达手机 |
+| 🔬 **策略回测与 Alpha 横评** | 支持 A股/港股策略回测、452 个预置 Alpha 因子（国君191、Qlib158、Alpha101）一键横评 |
+| 👥 **Shadow Account 交易复盘** | 上传同花顺/东方财富/富途账单，AI 提取你的交易规律，与 Shadow 策略做对比，找出错失机会 |
+| 🔌 **MCP 工具化** | 通过 MCP 协议接入 Claude Desktop / OpenClaw / Cursor 等任意 AI 工具，作为智能体工具箱使用 |
+| 🏗 **本地私有部署** | Docker 一键部署，数据留本地，多租户安全隔离，API 可信授权，支持异地局域网访问 |
 
 ## 💡 什么是 Vibe-Trading-CNX？
 
@@ -625,7 +593,8 @@ vibe-trading-cnx alpha bench --zoo gtja191 --universe csi300 --period 2020-2025 
 
 ---
 
-</details>
+
+
 ## 💡 典型示例
 
 <details>
@@ -954,7 +923,8 @@ Vibe-Trading-CNX/
 ---
 
 
-</details>
+
+
 ## 参与贡献
 
 欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解指南。
