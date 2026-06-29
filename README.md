@@ -606,28 +606,28 @@ vibe-trading-cnx alpha bench --zoo gtja191 --universe csi300 --period 2020-2025 
 ### Strategy & Backtesting
 
 ```bash
-# Moving average crossover on US equities
-vibe-trading run -p "Backtest a 20/50-day moving average crossover on AAPL for the past year, show Sharpe ratio and max drawdown"
+# 均线交叉策略回测 (A股/港股)
+vibe-trading-cnx run -p "回测贵州茅台 (600519) 过去一年的 20/50 日均线交叉策略，展示夏普比率与最大回撤"
 
-# RSI mean-reversion on crypto
-vibe-trading run -p "Test RSI(14) mean-reversion on BTC-USDT: buy below 30, sell above 70, last 6 months"
+# 超买超卖均值回归策略测试
+vibe-trading-cnx run -p "测试招商银行 (600036) RSI(14) 均值回归策略：低于30买入，高于70卖出，过去6个月"
 
-# Multi-factor strategy on A-shares
-vibe-trading run -p "Backtest a momentum + value + quality multi-factor strategy on CSI 300 constituents over 2 years"
+# 多因子策略回测
+vibe-trading-cnx run -p "回测沪深300成分股过去2年的动量+价值+质量多因子策略"
 
-# After backtesting, export to TradingView / TDX / MetaTrader 5
-vibe-trading --pine <run_id>
+# 回测完成后，一键导出至通达信 (TDX) / TradingView / MetaTrader 5
+vibe-trading-cnx --pine <run_id>
 ```
 
 **一行命令横评预置 alpha zoo**：
 ```bash
-vibe-trading alpha bench --zoo gtja191 --universe csi300 --period 2018-2025 --top 20
+vibe-trading-cnx alpha bench --zoo gtja191 --universe csi300 --period 2020-2025 --top 20
 ```
 
 **浏览目录** + 查看单个 alpha：
 ```bash
-vibe-trading alpha list --zoo gtja191 --theme reversal --limit 10
-vibe-trading alpha show gtja191_171
+vibe-trading-cnx alpha list --zoo gtja191 --theme reversal --limit 10
+vibe-trading-cnx alpha show gtja191_171
 ```
 
 **用 zoo 因子组合多因子信号**（Python）：
@@ -641,51 +641,52 @@ signal = engine.compute_signal(panel)
 ### Market Research
 
 ```bash
-# Equity deep-dive
-vibe-trading run -p "Research NVDA: earnings trend, analyst consensus, option flow, and key risks for next quarter"
+# 个股深度投研
+vibe-trading-cnx run -p "研究比亚迪 (002594)：财报趋势、分析师一致预期、大单资金流向及下季度核心风险"
 
-# Macro analysis
-vibe-trading run -p "Analyze the current Fed rate path, USD strength, and impact on EM equities and gold"
+# 宏观题材分析
+vibe-trading-cnx run -p "分析当前中国降准降息政策预期、人民币汇率走势及对 A股 与港股的影响"
 
-# Crypto on-chain
-vibe-trading run -p "Deep dive BTC on-chain: whale flows, exchange balances, miner activity, and funding rates"
+# 情绪面舆情特征深度监控
+vibe-trading-cnx run -p "深度挖掘雪球热门股情绪指标：监控大V多空动向、股吧热门评论与高管增减持"
 ```
 
 ### Swarm Workflows
 
 ```bash
-# Bull/bear debate on a stock
-vibe-trading --swarm-run investment_committee '{"topic": "Is TSLA a buy at current levels?"}'
+# 针对特定标的多空观点辩论
+vibe-trading-cnx --swarm-run investment_committee '{"topic": "当前位置的腾讯控股 (00700.HK) 是否值得买入？"}'
 
-# Quant strategy from screening to backtest
-vibe-trading --swarm-run quant_strategy_desk '{"universe": "S&P 500", "horizon": "3 months"}'
+# 因子筛选到回测审计的量化工作流
+vibe-trading-cnx --swarm-run quant_strategy_desk '{"universe": "csi300", "horizon": "3 months"}'
 
-# Crypto desk: funding + liquidation + flow → risk manager
-vibe-trading --swarm-run crypto_trading_desk '{"asset": "ETH-USDT", "timeframe": "1w"}'
+# 经典技术形态多智能体共识研判
+vibe-trading-cnx --swarm-run technical_analysis_panel '{"asset": "600519.SH", "timeframe": "1d"}'
 
-# Global macro portfolio allocation
-vibe-trading --swarm-run macro_rates_fx_desk '{"focus": "Fed pivot impact on EM bonds"}'
+# 宏观配置委员会进行资产配比建议
+vibe-trading-cnx --swarm-run macro_rates_fx_desk '{"focus": "央行降息流动性释放对国债与权益资产的再配置建议"}'
 ```
 
 ### Cross-Session Memory
 
 ```bash
-# Save your preferences once
-vibe-trading run -p "Remember: I prefer RSI-based strategies, max 10% drawdown, hold period 5–20 days"
+# 设定您的个人交易风格偏好 (一次记录，全站有效)
+vibe-trading-cnx run -p "记住：我偏好 RSI 策略，最大回撤限制为 10%，持仓期 5-20 天"
 
-# The agent recalls them in future sessions automatically
-vibe-trading run -p "Build a crypto strategy that fits my risk profile"
+# 智能体将在未来对话会话中自动读取该偏好约束
+vibe-trading-cnx run -p "为我设计一个适合我风险画像的 A股 策略"
 ```
 
 ### Upload & Analyze Documents
 
 ```bash
-# Analyze a broker export or earnings report
-vibe-trading --upload trades_export.csv
-vibe-trading run -p "Profile my trading behavior and identify any biases"
+# 上传个人交割单或券商账单进行交易复盘画像
+vibe-trading-cnx --upload trades_export.csv
+vibe-trading-cnx run -p "分析我的 A股/港股交易行为，提取我的 Shadow 策略，并与真实交易做对比"
 
-vibe-trading --upload NVDA_Q1_earnings.pdf
-vibe-trading run -p "Summarize the key risks and beats/misses from this earnings report"
+# 上传财报/研报 PDF 并提炼核心风险与业绩超预期情况
+vibe-trading-cnx --upload BYD_earnings.pdf
+vibe-trading-cnx run -p "总结该比亚迪季度财报中的核心风险及与业绩预期偏差"
 ```
 
 ---
@@ -693,7 +694,7 @@ vibe-trading run -p "Summarize the key risks and beats/misses from this earnings
 ## 🌐 API Server
 
 ```bash
-vibe-trading serve --port 8899
+vibe-trading-cnx serve --port 9888
 ```
 
 | Method | Endpoint | 说明 |
