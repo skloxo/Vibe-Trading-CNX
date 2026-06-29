@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { Activity, BarChart3, Bot, FileText, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2 } from "lucide-react";
+import { Activity, BarChart3, Bot, FileText, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { api, isAuthRequiredError, type SessionItem, type UserProfile } from "@/lib/api";
@@ -33,6 +33,7 @@ export function Layout() {
   const sseStatus = useAgentStore(s => s.sseStatus);
   const sseRetryAttempt = useAgentStore(s => s.sseRetryAttempt);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("qa-sidebar") === "collapsed");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore(s => s.streamingSessionId);
@@ -70,6 +71,11 @@ export function Layout() {
       .catch(() => {})
       .finally(() => setSessionsLoading(false));
   };
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   // Load sessions on mount. Also refresh when navigating TO /agent or when
   // the active session changes (covers new session creation from Agent).
@@ -125,12 +131,23 @@ export function Layout() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-background relative overflow-hidden">
+      {/* Mobile Drawer Overlay Backdrop */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - responsive absolute drawer on mobile */}
       <aside className={cn(
-        "border-r bg-card flex flex-col shrink-0 transition-all duration-200",
-        collapsed ? "w-12" : "w-64"
+        "border-r bg-card flex flex-col shrink-0 transition-all duration-200 z-50",
+        "max-md:fixed max-md:top-0 max-md:bottom-0 max-md:left-0 max-md:w-64 max-md:shadow-2xl",
+        mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
+        collapsed ? "md:w-12" : "md:w-64"
       )}>
+
         {/* Brand */}
         <div className={cn("border-b", collapsed ? "p-2 flex justify-center" : "p-4")}>
           <Link to="/" className={cn("flex items-center font-bold text-base tracking-tight", collapsed ? "justify-center" : "gap-2")}>
@@ -310,6 +327,21 @@ export function Layout() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile Header Bar */}
+        <header className="flex h-14 items-center justify-between border-b bg-card px-4 md:hidden shrink-0">
+          <Link to="/" className="flex items-center font-bold text-base tracking-tight gap-2">
+            <BarChart3 className="h-5 w-5 text-primary shrink-0" />
+            Vibe-Trading
+          </Link>
+          <button 
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="p-2 text-muted-foreground hover:text-foreground rounded transition-colors"
+            title="Menu"
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </header>
+
         <ConnectionBanner status={sseStatus} retryAttempt={sseRetryAttempt} />
         <main className="flex-1 overflow-auto">
           <Outlet />
@@ -318,3 +350,4 @@ export function Layout() {
     </div>
   );
 }
+

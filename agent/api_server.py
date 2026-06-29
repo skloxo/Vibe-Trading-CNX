@@ -909,9 +909,13 @@ _platform_manager = None
 async def _run_startup_preflight() -> None:
     """Run preflight checks on server startup."""
     from src.preflight import run_preflight
+    from src.core.public_cache import global_public_cache
 
     run_preflight(console)
     _start_scheduled_research_executor()
+
+    # Start the index index public cache thread
+    global_public_cache.start()
 
     # Initialize Platform Manager for multi-channel messaging (e.g. Feishu Bot)
     await _reload_platform_manager()
@@ -920,7 +924,12 @@ async def _run_startup_preflight() -> None:
 @app.on_event("shutdown")
 async def _stop_scheduled_research_on_shutdown() -> None:
     """Stop the scheduled research executor on server shutdown."""
+    from src.core.public_cache import global_public_cache
+    
     await _stop_scheduled_research_executor()
+
+    # Stop the index public cache thread
+    global_public_cache.stop()
 
     global _platform_manager
     if _platform_manager:
@@ -929,6 +938,7 @@ async def _stop_scheduled_research_on_shutdown() -> None:
             logger.info("[Platform] Platforms manager stopped.")
         except Exception as e:
             logger.exception("[Platform] Error stopping platforms manager: %s", e)
+
 
 
 # ============================================================================
@@ -2205,6 +2215,105 @@ async def delete_tenant_key(tenant_id: str):
         raise HTTPException(status_code=404, detail="Tenant key not found")
     _save_tenant_keys(filtered_keys)
     return {"status": "success"}
+
+
+@app.get(
+    "/admin/system/version",
+    dependencies=[Depends(require_admin)],
+)
+async def get_system_version(request: Request):
+    """Get the current and latest Git repository version."""
+    import subprocess
+    
+    current_ver = APP_VERSION
+    if not current_ver.startswith("v"):
+        current_ver = f"v{current_ver}"
+        
+    latest_ver = current_ver
+    has_update = False
+    
+    try:
+        # Run git fetch in the background/sync with timeout
+        subprocess.run(
+            ["git", "fetch", "--tags"], 
+            capture_output=True, 
+            timeout=3,
+            cwd=str(AGENT_DIR.parent)
+        )
+        # Get latest tag
+        res = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            cwd=str(AGENT_DIR.parent)
+        )
+        if res.returncode == 0:
+            tag = res.stdout.strip()
+            if tag:
+                latest_ver = tag
+                has_update = (latest_ver != current_ver)
+    except Exception:
+        pass
+        
+    return {
+        "current_version": current_ver,
+        "latest_version": latest_ver,
+        "has_update": has_update
+    }
+
+
+@app.post(
+    "/admin/system/update",
+    dependencies=[Depends(require_admin)],
+)
+async def trigger_system_update(request: Request):
+    """Trigger system update in the background."""
+    import subprocess
+    import shutil
+    
+    update_script = AGENT_DIR.parent / "update.sh"
+    if not update_script.exists():
+        update_script = AGENT_DIR / "update.sh"
+        if not update_script.exists():
+            raise HTTPException(
+                status_code=500,
+                detail="Update script (update.sh) not found in workspace."
+            )
+            
+    success = False
+    
+    # Try using systemd-run first if systemd is available
+    if shutil.which("systemd-run"):
+        try:
+            cmd = ["systemd-run", "--user", "bash", str(update_script)]
+            res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(AGENT_DIR.parent), timeout=5)
+            if res.returncode == 0:
+                success = True
+        except Exception:
+            pass
+            
+    # Fallback to subprocess.Popen with start_new_session=True
+    if not success:
+        try:
+            subprocess.Popen(
+                ["bash", str(update_script)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(AGENT_DIR.parent),
+                start_new_session=True
+            )
+            success = True
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to execute update script: {str(e)}"
+            )
+            
+    return {
+        "status": "updating",
+        "message": "System update triggered in the background. Service will restart shortly."
+    }
 
 
 @app.get(
@@ -4367,9 +4476,11 @@ async def delete_scheduled_run(job_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"scheduled run {job_id} not found")
 
 
+
 # ============================================================================
 # Main Entry Point
 # ============================================================================
+
 
 def serve_main(argv: list[str] | None = None) -> int:
     """Start the API server from CLI-style arguments."""

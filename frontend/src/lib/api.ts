@@ -241,7 +241,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  // Admin: System version & one-click upgrade
+  getSystemVersion: () => request<SystemVersionInfo>("/admin/system/version"),
+  triggerSystemUpdate: () =>
+    request<{ status: string; message: string }>("/admin/system/update", {
+      method: "POST",
+    }),
 };
+
 
 
 // --- Swarm types ---
@@ -1022,3 +1030,8 @@ export interface TenantKey {
   is_active: boolean;
 }
 
+export interface SystemVersionInfo {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+}

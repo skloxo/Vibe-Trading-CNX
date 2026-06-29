@@ -1,8 +1,8 @@
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check } from "lucide-react";
+import { ArrowUpCircle, Database, KeyRound, Loader2, MessageSquare, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type UserProfile, type TenantKey } from "@/lib/api";
+import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type UserProfile, type TenantKey, type SystemVersionInfo } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { createPortal } from "react-dom";
 import { AuthBarrier } from "@/components/layout/AuthBarrier";interface LLMFormState {
@@ -91,6 +91,13 @@ export function Settings() {
   const [registeredResult, setRegisteredResult] = useState<{ key: string; name: string; tenant_id: string } | null>(null);
   const [isRegisterCopied, setIsRegisterCopied] = useState(false);
 
+  // System version & one-click upgrade states
+  const [versionInfo, setVersionInfo] = useState<SystemVersionInfo | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeCountdown, setUpgradeCountdown] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   useEffect(() => {
     let alive = true;
     Promise.all([
@@ -157,6 +164,49 @@ export function Settings() {
       });
     return () => { alive = false; };
   }, []);
+
+  // Fetch system version info (admin/local only)
+  useEffect(() => {
+    let alive = true;
+    setVersionLoading(true);
+    api.getSystemVersion()
+      .then((info) => { if (alive) setVersionInfo(info); })
+      .catch(() => { /* non-admin users simply won't see this card */ })
+      .finally(() => { if (alive) setVersionLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  // Countdown timer for upgrade modal
+  useEffect(() => {
+    if (!showUpgradeModal) return;
+    setUpgradeCountdown(30);
+    const interval = setInterval(() => {
+      setUpgradeCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Auto-reload after countdown reaches 0
+          window.location.reload();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showUpgradeModal]);
+
+  async function handleTriggerUpgrade() {
+    if (upgrading) return;
+    setUpgrading(true);
+    try {
+      await api.triggerSystemUpdate();
+      setShowUpgradeModal(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "升级触发失败";
+      toast.error(msg);
+    } finally {
+      setUpgrading(false);
+    }
+  }
 
   const handleTabChange = (tab: "project" | "user") => {
     setActiveSubTab(tab);
@@ -1583,7 +1633,139 @@ export function Settings() {
         </div>
       )}
 
+      {/* --- System Version Card --- */}
+      {versionInfo && (
+        <div className="rounded-lg border bg-card p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <Server className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">系统版本管理</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">查看当前版本并一键升级到最新版</p>
+              </div>
+            </div>
+            <button
+              id="system-version-refresh-btn"
+              type="button"
+              onClick={() => {
+                setVersionLoading(true);
+                api.getSystemVersion()
+                  .then((info) => setVersionInfo(info))
+                  .catch(() => {})
+                  .finally(() => setVersionLoading(false));
+              }}
+              disabled={versionLoading}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${versionLoading ? "animate-spin" : ""}`} />
+              刷新版本信息
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            {/* Current version */}
+            <div className="rounded-md border bg-muted/30 px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1">当前版本</p>
+              <p className="font-mono font-semibold text-sm text-foreground">{versionInfo.current_version}</p>
+            </div>
+            {/* Latest version */}
+            <div className="rounded-md border bg-muted/30 px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1">最新版本</p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono font-semibold text-sm text-foreground">{versionInfo.latest_version}</p>
+                {versionInfo.has_update ? (
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    有新版本
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    已是最新
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {versionInfo.has_update && (
+            <button
+              id="system-one-click-upgrade-btn"
+              type="button"
+              onClick={handleTriggerUpgrade}
+              disabled={upgrading}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition disabled:opacity-70 cursor-pointer"
+            >
+              {upgrading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUpCircle className="h-4 w-4" />
+              )}
+              {upgrading ? "正在触发升级…" : `立即升级到 ${versionInfo.latest_version}`}
+            </button>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+            点击"立即升级"后，系统将在后台执行 <code className="font-mono text-xs bg-muted px-1 rounded">update.sh</code> 拉取最新代码并平滑重启服务。页面将自动进入等待重启状态。
+          </p>
+        </div>
+      )}
+
       {/* --- MODALS --- */}
+
+      {/* Upgrade Countdown Modal */}
+      {showUpgradeModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/70 backdrop-blur-lg">
+          {/* Glassmorphism card */}
+          <div className="relative flex flex-col items-center gap-6 rounded-2xl border border-white/10 bg-white/5 p-10 shadow-2xl backdrop-blur-xl text-center max-w-sm w-full mx-4">
+            {/* Animated ring */}
+            <div className="relative flex items-center justify-center" style={{ height: "128px", width: "128px" }}>
+              <svg className="absolute h-28 w-28 -rotate-90 animate-spin-slow" viewBox="0 0 100 100">
+                <circle
+                  cx="50" cy="50" r="44"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="6"
+                />
+                <circle
+                  cx="50" cy="50" r="44"
+                  fill="none"
+                  stroke="rgba(251,191,36,0.7)"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={`${(upgradeCountdown / 30) * 276.5} 276.5`}
+                  style={{ transition: "stroke-dasharray 1s linear" }}
+                />
+              </svg>
+              <span className="text-4xl font-bold text-white tabular-nums">{upgradeCountdown}</span>
+            </div>
+
+            <div style={{ marginTop: "16px" }}>
+              <h3 className="text-xl font-semibold text-white mb-2">系统升级中…</h3>
+
+              <p className="text-sm text-white/70 leading-relaxed">
+                后台正在拉取最新代码并重启服务<br />
+                页面将在 <span className="font-bold text-amber-400">{upgradeCountdown}</span> 秒后自动刷新
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 text-white/50 text-xs">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              服务重启中，请稍候…
+            </div>
+
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              立即刷新页面
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Feishu Modal */}
       {isModalOpen && createPortal(
