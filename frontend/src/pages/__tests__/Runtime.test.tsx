@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { Runtime } from "../Runtime";
 import type { LiveStatus } from "@/lib/api";
 
@@ -64,6 +64,16 @@ function makeStatus(overrides: Partial<LiveStatus> = {}): LiveStatus {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("Runtime page", () => {
   beforeEach(() => {
     apiMock.getLiveStatus.mockReset();
@@ -106,5 +116,65 @@ describe("Runtime page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     expect(apiMock.getLiveStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the newest live status when an older request resolves later", async () => {
+    const first = deferred<LiveStatus>();
+    const second = deferred<LiveStatus>();
+    apiMock.getLiveStatus
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    render(<Runtime />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await act(async () => {
+      second.resolve(makeStatus({ global_halted: true, brokers: [] }));
+      await second.promise;
+    });
+    expect(await screen.findByText("Halted")).toBeInTheDocument();
+
+    await act(async () => {
+      first.resolve(makeStatus());
+      await first.promise;
+    });
+
+    expect(screen.getByText("Halted")).toBeInTheDocument();
+    expect(screen.queryByText("paper")).not.toBeInTheDocument();
+  });
+
+  it("aborts an in-flight status request on unmount", () => {
+    const pending = deferred<LiveStatus>();
+    apiMock.getLiveStatus.mockReturnValue(pending.promise);
+
+    const { unmount } = render(<Runtime />);
+    const signal = apiMock.getLiveStatus.mock.calls[0][0] as AbortSignal;
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal.aborted).toBe(false);
+
+    unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("renders sub-minute mandate expiry as seconds", async () => {
+    const baseStatus = makeStatus();
+    const expiresAt = new Date(Date.now() + 45_000).toISOString();
+    apiMock.getLiveStatus.mockResolvedValue(makeStatus({
+      brokers: [
+        {
+          ...baseStatus.brokers[0],
+          mandate: {
+            ...baseStatus.brokers[0].mandate!,
+            expires_at: expiresAt,
+          },
+        },
+      ],
+    }));
+
+    render(<Runtime />);
+
+    expect(await screen.findByText("45s")).toBeInTheDocument();
   });
 });

@@ -7,7 +7,7 @@ These guard the security-critical invariants of the live-channel token cache:
   back from disk, never from constructor args or process memory alone.
 * A cached token never appears in any log record or in the OAuth transport's
   request-bound payload.
-* The store rejects path-escape keys (defense-in-depth on the cache root).
+* URL/path-shaped cache keys are neutralized into cache-root-local filenames.
 """
 
 from __future__ import annotations
@@ -71,6 +71,42 @@ def test_token_persists_across_store_instances(tmp_path: Path) -> None:
     assert read_back == token_value
 
 
+def test_fastmcp_url_cache_keys_are_filesystem_safe(tmp_path: Path) -> None:
+    """FastMCP OAuth keys include the raw MCP URL and must stay cache-local."""
+    cache = tmp_path / "oauth"
+    url = "https://agent.robinhood.com/mcp/trading"
+    entries = [
+        ("mcp-oauth-client-info", f"{url}/client_info"),
+        ("mcp-oauth-token", f"{url}/tokens"),
+        ("mcp-oauth-token-expiry", f"{url}/token_expiry"),
+    ]
+
+    async def _roundtrip_url_keys() -> None:
+        writer = _build_token_store(str(cache))
+        for collection, key in entries:
+            await writer.put(collection=collection, key=key, value={"key": key})
+
+        reader = _build_token_store(str(cache))
+        for collection, key in entries:
+            assert await reader.get(collection=collection, key=key) == {"key": key}
+
+    asyncio.run(_roundtrip_url_keys())
+
+    collection_names = {collection for collection, _ in entries}
+    payload_files = [
+        path.relative_to(cache)
+        for path in cache.rglob("*.json")
+        if path.parent.name in collection_names
+    ]
+    assert len(payload_files) == len(entries)
+    assert all(len(path.parts) == 2 for path in payload_files)
+    assert not any(
+        part in {"https:", "agent.robinhood.com", "mcp", "trading"}
+        for path in payload_files
+        for part in path.parts
+    )
+
+
 def test_token_value_never_in_args_or_payload(tmp_path: Path) -> None:
     """The token lives only on disk — it is never passed via constructor args.
 
@@ -104,22 +140,21 @@ def test_token_never_logged(tmp_path: Path, caplog) -> None:
         assert secret not in record.getMessage()
 
 
-def test_store_rejects_path_escape_key(tmp_path: Path) -> None:
-    """FileTreeStore fails closed when a key would escape the cache root."""
-    from key_value.aio.errors.store import PathSecurityError
-
+def test_store_sanitizes_path_escape_key_inside_cache_root(tmp_path: Path) -> None:
+    """Path-shaped keys are stored under a sanitized cache-local filename."""
     cache = tmp_path / "oauth"
     store = _build_token_store(str(cache))
 
-    async def _write_escape() -> None:
+    async def _write_escape() -> dict | None:
         await store.put(collection="robinhood", key="../../escape", value={"x": 1})
+        return await store.get(collection="robinhood", key="../../escape")
 
-    with pytest.raises(PathSecurityError):
-        asyncio.run(_write_escape())
+    assert asyncio.run(_write_escape()) == {"x": 1}
 
     # Nothing leaked outside the cache root.
     assert not (tmp_path / "escape").exists()
     assert not (tmp_path.parent / "escape").exists()
+    assert all(path.resolve().is_relative_to(cache.resolve()) for path in cache.rglob("*") if path.is_file())
 
 
 # --------------------------------------------------------------------------- #

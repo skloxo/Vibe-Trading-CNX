@@ -109,7 +109,7 @@ def _check_llm_provider() -> CheckResult:
         ping_url = base_url.rstrip("/")
         if ping_url.endswith("/v1"):
             ping_url = ping_url[:-3]
-        resp = requests.get(ping_url, timeout=10)
+        requests.get(ping_url, timeout=10)
         return CheckResult(
             name=f"LLM ({provider})",
             status="ready",
@@ -219,6 +219,21 @@ def _check_akshare() -> CheckResult:
     return CheckResult(name="akshare", status="ready", message="installed", impact="")
 
 
+def _check_content_filter_threshold() -> CheckResult:
+    """Report the configured content filter warning threshold."""
+    raw = os.getenv("CONTENT_FILTER_WARNING_THRESHOLD", "0.05")
+    try:
+        threshold = float(raw)
+    except (TypeError, ValueError):
+        threshold = 0.05
+    return CheckResult(
+        name="Content Filter Threshold",
+        status="ready",
+        message=f"{threshold:.0%} (set via CONTENT_FILTER_WARNING_THRESHOLD)",
+        impact="",
+    )
+
+
 def _check_ccxt() -> CheckResult:
     """Check ccxt availability."""
     try:
@@ -262,6 +277,7 @@ def run_preflight(console: Optional[Console] = None) -> List[CheckResult]:
         _check_tushare,
         _check_akshare,
         _check_ccxt,
+        _check_content_filter_threshold,
     ]
 
     results: List[CheckResult] = []

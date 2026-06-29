@@ -7,6 +7,11 @@
     "noCorrelationData": "No correlation data",
     "noEquityData": "No equity data"
   },
+  "charts": {
+    "noPriceData": "No price data",
+    "noCorrelationData": "No correlation data",
+    "noEquityData": "No equity data"
+  },
   "layout": {
     "home": "Home",
     "agent": "Agent",

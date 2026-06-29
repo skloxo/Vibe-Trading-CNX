@@ -1335,6 +1335,40 @@ def _build_typer_app():  # type: ignore[no-untyped-def]
     def _init() -> None:
         run_onboarding(console=get_console())
 
+    @app.command("setup", help="Install frontend deps and build the production bundle (cross-platform).")
+    def _setup(
+        frontend_dir: str = typer.Option(
+            "frontend",
+            "--frontend-dir",
+            help="Path to the frontend directory (relative to repo root or absolute).",
+        ),
+    ) -> None:
+        sys.exit(main(["setup", "--frontend-dir", frontend_dir]))
+
+    @app.command("dev", help="Start backend + Vite dev server in one process.")
+    def _dev(
+        port: int = typer.Option(8899, "--port", help="Backend port."),
+        frontend_port: int = typer.Option(
+            5899,
+            "--frontend-port",
+            help="Vite dev server port (must match vite.config.ts).",
+        ),
+        frontend_dir: str = typer.Option("frontend", "--frontend-dir"),
+    ) -> None:
+        sys.exit(
+            main(
+                [
+                    "dev",
+                    "--port",
+                    str(port),
+                    "--frontend-port",
+                    str(frontend_port),
+                    "--frontend-dir",
+                    frontend_dir,
+                ]
+            )
+        )
+
     return app
 
 

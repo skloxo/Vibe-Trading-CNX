@@ -7,6 +7,11 @@
     "noCorrelationData": "暂无相关性数据",
     "noEquityData": "暂无收益曲线数据"
   },
+  "charts": {
+    "noPriceData": "暂无价格数据",
+    "noCorrelationData": "暂无相关性数据",
+    "noEquityData": "暂无收益曲线数据"
+  },
   "layout": {
     "home": "首页",
     "agent": "智能体",
