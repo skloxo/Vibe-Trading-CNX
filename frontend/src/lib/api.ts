@@ -180,10 +180,9 @@ export const api = {
     request<{ status: string; qrcode: string }>(`/settings/platforms/wechat/channels/${id}/qrcode`),
   getWechatChannelStatus: (id: string) =>
     request<{ status: string }>(`/settings/platforms/wechat/channels/${id}/status`),
-  getWechatTransientQrcode: (mode: string = "ilink", picoclawUrl?: string) => {
+  getWechatTransientQrcode: (mode: string = "ilink") => {
     const q = new URLSearchParams();
     q.set("mode", mode);
-    if (picoclawUrl) q.set("picoclaw_url", picoclawUrl);
     return request<{ status: string; qrcode: string; temp_id: string }>(`/settings/platforms/wechat/transient/qrcode?${q.toString()}`);
   },
   getWechatTransientStatus: (tempId: string) =>
@@ -397,12 +396,11 @@ export interface UpdateFeishuChannelRequest {
 export interface WechatChannel {
   id: string;
   name: string;
-  mode: string; // "wecom" | "picoclaw" | "ilink"
+  mode: string; // "wecom" | "ilink"
   wecom_webhook: string;
   wecom_corpid: string;
   wecom_secret_configured: boolean;
   wecom_agentid: string;
-  picoclaw_url: string;
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;
@@ -417,7 +415,6 @@ export interface CreateWechatChannelRequest {
   wecom_corpid?: string;
   wecom_secret?: string;
   wecom_agentid?: string;
-  picoclaw_url?: string;
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;
@@ -432,7 +429,6 @@ export interface UpdateWechatChannelRequest {
   wecom_corpid?: string;
   wecom_secret?: string;
   wecom_agentid?: string;
-  picoclaw_url?: string;
   enabled: boolean;
   ilink_bot_token?: string;
   ilink_base_url?: string;

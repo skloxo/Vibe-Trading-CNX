@@ -18,14 +18,12 @@ class WechatAdapter(BasePlatformAdapter):
         self,
         channel_id: str,
         name: str,
-        mode: str,  # "wecom", "picoclaw", or "ilink"
+        mode: str,  # "wecom" or "ilink"
         # WeCom settings
         wecom_webhook: str = "",
         wecom_corpid: str = "",
         wecom_secret: str = "",
         wecom_agentid: str = "",
-        # PicoClaw settings
-        picoclaw_url: str = "http://127.0.0.1:18790",
         # iLink settings
         ilink_bot_token: str = "",
         ilink_base_url: str = "",
@@ -36,12 +34,11 @@ class WechatAdapter(BasePlatformAdapter):
         self.tenant_id = tenant_id
         self._channel_id = channel_id
         self._name = name
-        self._mode = mode  # "wecom", "picoclaw", or "ilink"
+        self._mode = mode  # "wecom" or "ilink"
         self._wecom_webhook = wecom_webhook.strip()
         self._wecom_corpid = wecom_corpid.strip()
         self._wecom_secret = wecom_secret.strip()
         self._wecom_agentid = wecom_agentid.strip()
-        self._picoclaw_url = picoclaw_url.strip()
         self._ilink_bot_token = ilink_bot_token.strip()
         self._ilink_base_url = ilink_base_url.strip()
         self._ilink_bot_id = ilink_bot_id.strip()
@@ -272,24 +269,6 @@ class WechatAdapter(BasePlatformAdapter):
                     except Exception as e:
                         logger.error(f"[WeChat WeCom App] Failed to send message: {e}")
                         raise
-        elif self._mode == "picoclaw":
-            # PicoClaw Mode
-            async with httpx.AsyncClient() as client:
-                payload = {
-                    "chat_id": chat_id,
-                    "content": content,
-                }
-                if title:
-                    payload["title"] = title
-                try:
-                    res = await client.post(f"{self._picoclaw_url}/api/send", json=payload, timeout=10)
-                    res.raise_for_status()
-                    data = res.json()
-                    logger.info(f"[WeChat PicoClaw] Message sent successfully via PicoClaw gateway.")
-                    return str(data.get("message_id", "picoclaw_msg"))
-                except Exception as e:
-                    logger.error(f"[WeChat PicoClaw] Failed to send message via PicoClaw gateway: {e}")
-                    raise
         else:
             # iLink Mode
             base_url = self._ilink_base_url.rstrip("/")

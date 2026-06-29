@@ -1,6 +1,6 @@
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, Send, QrCode } from "lucide-react";
+import { Database, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type WechatChannel, type UserProfile, type TenantKey } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
@@ -69,13 +69,12 @@ export function Settings() {
 
   // Form states for WeChat modal
   const [wechatChanName, setWechatChanName] = useState("");
-  const [wechatChanMode, setWechatChanMode] = useState("wecom"); // "wecom" or "picoclaw"
+  const [wechatChanMode, setWechatChanMode] = useState("wecom"); // "wecom" or "ilink"
   const [wechatChanEnabled, setWechatChanEnabled] = useState(true);
   const [wechatWecomWebhook, setWechatWecomWebhook] = useState("");
   const [wechatWecomCorpid, setWechatWecomCorpid] = useState("");
   const [wechatWecomSecret, setWechatWecomSecret] = useState("");
   const [wechatWecomAgentid, setWechatWecomAgentid] = useState("");
-  const [wechatPicoclawUrl, setWechatPicoclawUrl] = useState("http://127.0.0.1:18790");
   const [wechatIlinkBotToken, setWechatIlinkBotToken] = useState("");
   const [wechatIlinkBaseUrl, setWechatIlinkBaseUrl] = useState("");
   const [wechatSaving, setWechatSaving] = useState(false);
@@ -85,10 +84,7 @@ export function Settings() {
   const [retrievedUserId, setRetrievedUserId] = useState<string>("");
   const [showTransientScanner, setShowTransientScanner] = useState<boolean>(false);
 
-  // QR Code login polling states
-  const [activeQrChannelId, setActiveQrChannelId] = useState<string | null>(null);
-  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
-  const [qrLoginStatus, setQrLoginStatus] = useState<"idle" | "waiting" | "scanned" | "login" | "expired">("idle");
+
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -436,7 +432,6 @@ export function Settings() {
     setWechatWecomCorpid("");
     setWechatWecomSecret("");
     setWechatWecomAgentid("");
-    setWechatPicoclawUrl("http://127.0.0.1:18790");
     setWechatIlinkBotToken("");
     setWechatIlinkBaseUrl("");
     
@@ -458,7 +453,6 @@ export function Settings() {
     setWechatWecomCorpid(channel.wecom_corpid || "");
     setWechatWecomSecret("");
     setWechatWecomAgentid(channel.wecom_agentid || "");
-    setWechatPicoclawUrl(channel.picoclaw_url || "http://127.0.0.1:18790");
     setWechatIlinkBotToken(channel.ilink_bot_token || "");
     setWechatIlinkBaseUrl(channel.ilink_base_url || "");
     
@@ -483,7 +477,6 @@ export function Settings() {
           wecom_corpid: wechatWecomCorpid.trim(),
           wecom_secret: wechatWecomSecret.trim() || undefined,
           wecom_agentid: wechatWecomAgentid.trim(),
-          picoclaw_url: wechatPicoclawUrl.trim(),
           ilink_bot_token: wechatIlinkBotToken.trim(),
           ilink_base_url: wechatIlinkBaseUrl.trim(),
           ilink_bot_id: retrievedBotId.trim(),
@@ -500,7 +493,6 @@ export function Settings() {
           wecom_corpid: wechatWecomCorpid.trim(),
           wecom_secret: wechatWecomSecret.trim(),
           wecom_agentid: wechatWecomAgentid.trim(),
-          picoclaw_url: wechatPicoclawUrl.trim(),
           ilink_bot_token: wechatIlinkBotToken.trim(),
           ilink_base_url: wechatIlinkBaseUrl.trim(),
           ilink_bot_id: retrievedBotId.trim(),
@@ -528,7 +520,6 @@ export function Settings() {
         wecom_corpid: channel.wecom_corpid,
         wecom_secret: undefined,
         wecom_agentid: channel.wecom_agentid,
-        picoclaw_url: channel.picoclaw_url,
         ilink_bot_token: channel.ilink_bot_token,
         enabled: !channel.enabled,
       });
@@ -544,84 +535,7 @@ export function Settings() {
     setWechatChannelToDelete(id);
   };
 
-  // Poll WeChat QR code and login status
-  useEffect(() => {
-    if (!activeQrChannelId) {
-      setQrCodeData(null);
-      setQrLoginStatus("idle");
-      return;
-    }
 
-    let timeoutId: any = null;
-
-    const fetchQrAndPoll = async () => {
-      try {
-        setQrLoginStatus("waiting");
-        const data = await api.getWechatChannelQrcode(activeQrChannelId);
-        if (data.qrcode) {
-          setQrCodeData(data.qrcode);
-        }
-        if (data.status) {
-          if (data.status === "login" || data.status === "success" || data.status === "logged_in") {
-            setQrLoginStatus("login");
-            api.getWechatChannels().then(setWechatChannels).catch(console.error);
-            setTimeout(() => {
-              setActiveQrChannelId(null);
-            }, 2000);
-            return;
-          } else if (data.status === "scanned") {
-            setQrLoginStatus("scanned");
-          } else if (data.status === "expired") {
-            setQrLoginStatus("expired");
-            return;
-          } else {
-            setQrLoginStatus("waiting");
-          }
-        }
-
-        const pollStatus = async () => {
-          if (!activeQrChannelId) return;
-          try {
-            const statusData = await api.getWechatChannelStatus(activeQrChannelId);
-            if (statusData.status) {
-              const normalizedStatus = statusData.status;
-              if (normalizedStatus === "login" || normalizedStatus === "success" || normalizedStatus === "logged_in") {
-                setQrLoginStatus("login");
-                api.getWechatChannels().then(setWechatChannels).catch(console.error);
-                setTimeout(() => {
-                  setActiveQrChannelId(null);
-                }, 2000);
-                return;
-              } else if (normalizedStatus === "scanned") {
-                setQrLoginStatus("scanned");
-              } else if (normalizedStatus === "expired") {
-                setQrLoginStatus("expired");
-                return;
-              } else {
-                setQrLoginStatus("waiting");
-              }
-            }
-          } catch (err) {
-            console.error("Error polling WeChat status:", err);
-          }
-          timeoutId = setTimeout(pollStatus, 2000);
-        };
-
-        timeoutId = setTimeout(pollStatus, 2000);
-      } catch (err: any) {
-        console.error("Error initiating WeChat QR login:", err);
-        const errMsg = err.response?.data?.detail || "无法获取扫码登录二维码，请确保通道配置正确且网关正常启动";
-        toast.error(errMsg);
-        setActiveQrChannelId(null);
-      }
-    };
-
-    fetchQrAndPoll();
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeQrChannelId]);
 
   // Poll WeChat Transient QR code and login status
   useEffect(() => {
@@ -1465,7 +1379,7 @@ export function Settings() {
                   <MessageSquare className="h-4 w-4 text-primary" />
                   <h2 className="text-base font-semibold">微信通道设置</h2>
                 </div>
-                <p className="text-xs text-muted-foreground">配置个人微信（PicoClaw）或企业微信（WeCom）消息推送通道</p>
+                <p className="text-xs text-muted-foreground">配置个人微信（iLink）或企业微信（WeCom）消息推送通道</p>
               </div>
               <button
                 type="button"
@@ -1497,7 +1411,7 @@ export function Settings() {
                             {channel.enabled ? "Active" : "Disabled"}
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium">
-                            {channel.mode === "wecom" ? "企业微信" : channel.mode === "picoclaw" ? "个人微信 (PicoClaw)" : "官方微信机器人 (iLink)"}
+                            {channel.mode === "wecom" ? "企业微信" : "官方微信机器人 (iLink)"}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-mono">
@@ -1512,10 +1426,6 @@ export function Settings() {
                               )}
                               <span>•</span>
                               <span>Secret: {channel.wecom_secret_configured ? "••••••••" : "Not Configured"}</span>
-                            </>
-                          ) : channel.mode === "picoclaw" ? (
-                            <>
-                              <span>Gateway URL: {channel.picoclaw_url}</span>
                             </>
                           ) : (
                             <>
@@ -1534,26 +1444,6 @@ export function Settings() {
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        {(channel.mode === "picoclaw" || channel.mode === "ilink") && channel.enabled && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (activeQrChannelId === channel.id) {
-                                setActiveQrChannelId(null);
-                              } else {
-                                setActiveQrChannelId(channel.id);
-                              }
-                            }}
-                            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium border transition cursor-pointer ${
-                              activeQrChannelId === channel.id
-                                ? "bg-primary/20 text-primary border-primary/30"
-                                : "bg-primary/10 hover:bg-primary/20 text-primary border-transparent"
-                            }`}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            {activeQrChannelId === channel.id ? "关闭扫码" : "扫码登录"}
-                          </button>
-                        )}
                         <button
                           type="button"
                           onClick={() => toggleWechatChannelEnabled(channel)}
@@ -1585,63 +1475,6 @@ export function Settings() {
                       </div>
                     </div>
 
-                    {/* QR Code Container for PicoClaw Scan Auth */}
-                    {activeQrChannelId === channel.id && (
-                      <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-black/20 gap-3 max-w-sm mx-auto w-full animate-in fade-in duration-200">
-                        <div className="text-xs font-medium text-muted-foreground mb-1">
-                          {qrLoginStatus === "waiting" && "请使用手机微信扫描二维码登录"}
-                          {qrLoginStatus === "scanned" && "已扫码，请在手机端确认登录"}
-                          {qrLoginStatus === "login" && "🎉 登录成功，通道已在线！"}
-                          {qrLoginStatus === "expired" && "二维码已过期，请重新获取"}
-                        </div>
-
-                        {qrCodeData ? (
-                          <div className="relative border p-2 bg-white rounded-lg">
-                            <img
-                              src={qrCodeData}
-                              alt="WeChat Login QR Code"
-                              className="h-40 w-40 object-contain"
-                            />
-                            {qrLoginStatus === "expired" && (
-                              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg flex-col gap-2">
-                                <span className="text-xs text-white">二维码已过期</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const cid = activeQrChannelId;
-                                    setActiveQrChannelId(null);
-                                    setTimeout(() => setActiveQrChannelId(cid), 100);
-                                  }}
-                                  className="rounded bg-primary px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
-                                >
-                                  点击刷新
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="h-40 w-40 flex items-center justify-center border rounded-lg bg-muted/30">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                          <span className={`h-2 w-2 rounded-full ${
-                            qrLoginStatus === "login" ? "bg-green-500" :
-                            qrLoginStatus === "scanned" ? "bg-blue-500 animate-pulse" :
-                            qrLoginStatus === "waiting" ? "bg-yellow-500 animate-pulse" : "bg-red-500"
-                          }`} />
-                          <span>
-                            状态: {
-                              qrLoginStatus === "login" ? "已在线" :
-                              qrLoginStatus === "scanned" ? "扫码成功，请在手机上确认..." :
-                              qrLoginStatus === "waiting" ? "等待扫码..." :
-                              qrLoginStatus === "expired" ? "已过期" : "获取中..."
-                            }
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -2215,9 +2048,6 @@ export function Settings() {
                   setWechatChannelToDelete(null);
                   const previousChannels = wechatChannels;
                   setWechatChannels(wechatChannels.filter((c) => c.id !== id));
-                  if (activeQrChannelId === id) {
-                    setActiveQrChannelId(null);
-                  }
                   try {
                     await api.deleteWechatChannel(id);
                     toast.success("微信通道已删除");
@@ -2265,7 +2095,6 @@ export function Settings() {
                   className={fieldClass}
                 >
                   <option value="wecom">企业微信 (WeCom)</option>
-                  <option value="picoclaw">个人微信 (PicoClaw 网关)</option>
                   <option value="ilink">官方微信机器人 (iLink)</option>
                 </select>
               </label>
@@ -2325,20 +2154,6 @@ export function Settings() {
                     </div>
                   </label>
                 </>
-              )}
-
-              {wechatChanMode === "picoclaw" && (
-                <label className="grid gap-1.5">
-                  <span className={labelClass}>PicoClaw Gateway URL</span>
-                  <input
-                    type="text"
-                    required
-                    value={wechatPicoclawUrl}
-                    onChange={(e) => setWechatPicoclawUrl(e.target.value)}
-                    className={fieldClass}
-                    placeholder="http://127.0.0.1:18790"
-                  />
-                </label>
               )}
 
               {wechatChanMode === "ilink" && (

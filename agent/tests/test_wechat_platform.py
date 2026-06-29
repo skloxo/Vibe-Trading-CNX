@@ -184,25 +184,6 @@ async def test_wechat_adapter_message_sending():
         assert msg_id == "wecom_webhook_msg_200"
         mock_post.assert_called_once()
         
-    # Test PicoClaw sending mode
-    adapter_pc = WechatAdapter(
-        channel_id="chan_test",
-        name="Test WeChat",
-        mode="picoclaw",
-        picoclaw_url="http://127.0.0.1:18790"
-    )
-    
-    mock_response_pc = MagicMock()
-    mock_response_pc.status_code = 200
-    mock_response_pc.json.return_value = {"message_id": "msg_999"}
-    mock_response_pc.raise_for_status = MagicMock()
-    
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_response_pc
-        msg_id = await adapter_pc.send_message(chat_id="user123", content="Hello")
-        assert msg_id == "msg_999"
-        mock_post.assert_called_once()
-
     # Test iLink sending mode
     adapter_il = WechatAdapter(
         channel_id="chan_test",
@@ -223,42 +204,7 @@ async def test_wechat_adapter_message_sending():
         mock_post.assert_called_once()
 
 
-def test_wechat_webhook_receiver(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Setup active platform manager mock
-    mock_pm = MagicMock()
-    mock_pm._adapters = {}
-    
-    # Register mock adapter in manager
-    mock_adapter = MagicMock()
-    mock_adapter.tenant_id = "default"
-    mock_adapter.platform_name = "wechat_default_chan123"
-    mock_pm._adapters["wechat_default_chan123"] = mock_adapter
-    
-    monkeypatch.setattr(api_server, "_platform_manager", mock_pm)
-    
-    # Route callback
-    res = client.post(
-        "/platforms/wechat/webhook/default/chan123",
-        json={
-            "chat_id": "wx_chat_abc",
-            "content": "查一下贵州茅台",
-            "sender_id": "wx_user_xyz",
-            "message_id": "msg_001",
-            "timestamp": 1625000000.0
-        }
-    )
-    assert res.status_code == 200
-    assert res.json() == {"status": "success"}
-    
-    # Verify platform manager received the message
-    mock_pm.submit_incoming_message.assert_called_once()
-    incoming = mock_pm.submit_incoming_message.call_args[0][0]
-    assert isinstance(incoming, IncomingMessage)
-    assert incoming.platform == "wechat_default_chan123"
-    assert incoming.chat_id == "wx_chat_abc"
-    assert incoming.content == "查一下贵州茅台"
-    assert incoming.sender_id == "wx_user_xyz"
-    assert incoming.message_id == "msg_001"
+
 
 
 @pytest.mark.anyio

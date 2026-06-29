@@ -399,12 +399,11 @@ class WechatChannelResponse(BaseModel):
     """Detailed information for a single WeChat channel."""
     id: str
     name: str
-    mode: str  # "wecom", "picoclaw", or "ilink"
+    mode: str  # "wecom" or "ilink"
     wecom_webhook: str
     wecom_corpid: str
     wecom_secret_configured: bool
     wecom_agentid: str
-    picoclaw_url: str
     enabled: bool
     ilink_bot_token: Optional[str] = ""
     ilink_base_url: Optional[str] = ""
@@ -415,12 +414,11 @@ class WechatChannelResponse(BaseModel):
 class CreateWechatChannelRequest(BaseModel):
     """Payload to create a new WeChat channel."""
     name: str
-    mode: str  # "wecom", "picoclaw", or "ilink"
+    mode: str  # "wecom" or "ilink"
     wecom_webhook: Optional[str] = ""
     wecom_corpid: Optional[str] = ""
     wecom_secret: Optional[str] = ""
     wecom_agentid: Optional[str] = ""
-    picoclaw_url: Optional[str] = "http://127.0.0.1:18790"
     enabled: bool = True
     ilink_bot_token: Optional[str] = ""
     ilink_base_url: Optional[str] = ""
@@ -431,12 +429,11 @@ class CreateWechatChannelRequest(BaseModel):
 class UpdateWechatChannelRequest(BaseModel):
     """Payload to update an existing WeChat channel."""
     name: str
-    mode: str  # "wecom", "picoclaw", or "ilink"
+    mode: str  # "wecom" or "ilink"
     wecom_webhook: Optional[str] = ""
     wecom_corpid: Optional[str] = ""
     wecom_secret: Optional[str] = None
     wecom_agentid: Optional[str] = ""
-    picoclaw_url: Optional[str] = "http://127.0.0.1:18790"
     enabled: bool = True
     ilink_bot_token: Optional[str] = None
     ilink_base_url: Optional[str] = None
@@ -1019,7 +1016,6 @@ async def _reload_platform_manager() -> None:
                                 wecom_corpid=wchan.get("wecom_corpid", ""),
                                 wecom_secret=wchan.get("wecom_secret", ""),
                                 wecom_agentid=wchan.get("wecom_agentid", ""),
-                                picoclaw_url=wchan.get("picoclaw_url", "http://127.0.0.1:18790"),
                                 ilink_bot_token=wchan.get("ilink_bot_token", ""),
                                 ilink_base_url=wchan.get("ilink_base_url", ""),
                                 ilink_bot_id=wchan.get("ilink_bot_id", ""),
@@ -2740,7 +2736,6 @@ async def list_wechat_channels():
             wecom_corpid=c.get("wecom_corpid", ""),
             wecom_secret_configured=bool(c.get("wecom_secret")) and c.get("wecom_secret") not in WECHAT_SECRET_PLACEHOLDERS,
             wecom_agentid=c.get("wecom_agentid", ""),
-            picoclaw_url=c.get("picoclaw_url", "http://127.0.0.1:18790"),
             enabled=c.get("enabled", True),
             ilink_bot_token=c.get("ilink_bot_token", ""),
             ilink_base_url=c.get("ilink_base_url", ""),
@@ -2770,7 +2765,6 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
         "wecom_corpid": (payload.wecom_corpid or "").strip(),
         "wecom_secret": (payload.wecom_secret or "").strip(),
         "wecom_agentid": (payload.wecom_agentid or "").strip(),
-        "picoclaw_url": (payload.picoclaw_url or "http://127.0.0.1:18790").strip(),
         "enabled": payload.enabled,
         "ilink_bot_token": (payload.ilink_bot_token or "").strip(),
         "ilink_base_url": (payload.ilink_base_url or "https://ilinkai.weixin.qq.com").strip(),
@@ -2810,7 +2804,6 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
         wecom_corpid=new_channel["wecom_corpid"],
         wecom_secret_configured=bool(new_channel["wecom_secret"]) and new_channel["wecom_secret"] not in WECHAT_SECRET_PLACEHOLDERS,
         wecom_agentid=new_channel["wecom_agentid"],
-        picoclaw_url=new_channel["picoclaw_url"],
         enabled=new_channel["enabled"],
         ilink_bot_token=new_channel["ilink_bot_token"],
         ilink_base_url=new_channel["ilink_base_url"],
@@ -2842,7 +2835,6 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
     c["wecom_webhook"] = (payload.wecom_webhook or "").strip()
     c["wecom_corpid"] = (payload.wecom_corpid or "").strip()
     c["wecom_agentid"] = (payload.wecom_agentid or "").strip()
-    c["picoclaw_url"] = (payload.picoclaw_url or "http://127.0.0.1:18790").strip()
     c["enabled"] = payload.enabled
     
     if payload.wecom_secret is not None:
@@ -2900,7 +2892,6 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
         wecom_corpid=c["wecom_corpid"],
         wecom_secret_configured=bool(c.get("wecom_secret")) and c["wecom_secret"] not in WECHAT_SECRET_PLACEHOLDERS,
         wecom_agentid=c["wecom_agentid"],
-        picoclaw_url=c["picoclaw_url"],
         enabled=c["enabled"],
         ilink_bot_token=c.get("ilink_bot_token", ""),
         ilink_base_url=c.get("ilink_base_url", ""),
@@ -2936,7 +2927,7 @@ active_transient_logins: dict[str, dict] = {}
     "/settings/platforms/wechat/transient/qrcode",
     dependencies=[Depends(require_local_or_auth)],
 )
-async def get_wechat_transient_qrcode(mode: str = "ilink", picoclaw_url: Optional[str] = "http://127.0.0.1:18790"):
+async def get_wechat_transient_qrcode(mode: str = "ilink"):
     """Fetch WeChat login QR code transiently without requiring an existing channel."""
     import secrets
     import time
@@ -2972,26 +2963,6 @@ async def get_wechat_transient_qrcode(mode: str = "ilink", picoclaw_url: Optiona
         except Exception as e:
             logger.warning("Failed to fetch official iLink QR code: %s", e)
             raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}")
-
-    elif mode == "picoclaw":
-        url = (picoclaw_url or "http://127.0.0.1:18790").strip()
-        async with httpx.AsyncClient() as client:
-            try:
-                res = await client.get(f"{url}/api/login/qrcode", timeout=5)
-                if res.status_code == 200:
-                    ret = res.json()
-                    ret["temp_id"] = temp_id
-                    active_transient_logins[temp_id] = {
-                        "mode": "picoclaw",
-                        "picoclaw_url": url,
-                        "started_at": time.time(),
-                    }
-                    return ret
-                else:
-                    raise HTTPException(status_code=res.status_code, detail=f"PicoClaw 网关响应错误 (HTTP {res.status_code})")
-            except Exception as e:
-                logger.warning("Failed to fetch QR code from PicoClaw at %s: %s", url, e)
-                raise HTTPException(status_code=400, detail=f"连接 PicoClaw 微信网关失败，请确保本地 PicoClaw 服务已在 {url} 正常启动并且可达。")
 
     raise HTTPException(status_code=400, detail="Unsupported mode")
 
@@ -3054,19 +3025,6 @@ async def get_wechat_transient_status(temp_id: str):
             logger.warning("Failed to process official iLink QR status data: %s", e)
             return {"status": "waiting"}
 
-    elif mode == "picoclaw":
-        picoclaw_url = login_context.get("picoclaw_url")
-        import httpx
-        async with httpx.AsyncClient() as client:
-            try:
-                res = await client.get(f"{picoclaw_url}/api/login/status", timeout=5)
-                if res.status_code == 200:
-                    return res.json()
-            except Exception as e:
-                logger.warning("Failed to fetch status from PicoClaw at %s: %s", picoclaw_url, e)
-
-        return {"status": "waiting"}
-
     return {"status": "waiting"}
 
 
@@ -3075,7 +3033,7 @@ async def get_wechat_transient_status(temp_id: str):
     dependencies=[Depends(require_local_or_auth)],
 )
 async def get_wechat_channel_qrcode(channel_id: str):
-    """Fetch WeChat login QR code from the local PicoClaw instance or iLink official gateway."""
+    """Fetch WeChat login QR code from the iLink official gateway."""
     channels = _load_wechat_channels()
     channel = next((c for c in channels if c["id"] == channel_id), None)
     if not channel:
@@ -3116,18 +3074,7 @@ async def get_wechat_channel_qrcode(channel_id: str):
             logger.warning("Failed to fetch official iLink QR code: %s", e)
             raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}")
             
-    picoclaw_url = channel.get("picoclaw_url", "http://127.0.0.1:18790").strip()
-    import httpx
-    async with httpx.AsyncClient() as client:
-        try:
-            res = await client.get(f"{picoclaw_url}/api/login/qrcode", timeout=5)
-            if res.status_code == 200:
-                return res.json()
-            else:
-                raise HTTPException(status_code=res.status_code, detail=f"PicoClaw 网关响应错误 (HTTP {res.status_code})")
-        except Exception as e:
-            logger.warning("Failed to fetch QR code from PicoClaw at %s: %s", picoclaw_url, e)
-            raise HTTPException(status_code=400, detail=f"连接 PicoClaw 微信网关失败，请确保本地 PicoClaw 服务已在 {picoclaw_url} 正常启动并且可达。")
+    raise HTTPException(status_code=400, detail="该通道不支持获取网页扫码，请通过配置界面扫码。")
 
 
 @app.get(
@@ -3135,7 +3082,7 @@ async def get_wechat_channel_qrcode(channel_id: str):
     dependencies=[Depends(require_local_or_auth)],
 )
 async def get_wechat_channel_status(channel_id: str):
-    """Fetch WeChat login status from the local PicoClaw instance or iLink official gateway."""
+    """Fetch WeChat login status from the iLink official gateway."""
     channels = _load_wechat_channels()
     channel = next((c for c in channels if c["id"] == channel_id), None)
     if not channel:
@@ -3221,69 +3168,7 @@ async def get_wechat_channel_status(channel_id: str):
         except Exception as e:
             logger.warning("Failed to process official iLink QR status data: %s", e)
             return {"status": "waiting"}
-        
-    picoclaw_url = channel.get("picoclaw_url", "http://127.0.0.1:18790").strip()
-    
-    import httpx
-    async with httpx.AsyncClient() as client:
-        try:
-            res = await client.get(f"{picoclaw_url}/api/login/status", timeout=5)
-            if res.status_code == 200:
-                return res.json()
-        except Exception as e:
-            logger.warning("Failed to fetch status from PicoClaw at %s: %s", picoclaw_url, e)
-            
     return {"status": "waiting"}
-
-
-@app.post(
-    "/platforms/wechat/webhook/{tenant_id}/{channel_id}",
-)
-async def wechat_webhook(tenant_id: str, channel_id: str, payload: dict):
-    """Receive webhook message callbacks from PicoClaw and route them to PlatformManager."""
-    logger.info("Received WeChat webhook callback: tenant_id=%s, channel_id=%s, payload=%s", tenant_id, channel_id, payload)
-    
-    if not _platform_manager:
-        raise HTTPException(status_code=503, detail="Platform manager is not running")
-        
-    platform_name = f"wechat_{tenant_id}_{channel_id}"
-    adapter = _platform_manager._adapters.get(platform_name)
-    if not adapter:
-        raise HTTPException(status_code=404, detail=f"WeChat adapter {platform_name} not found")
-        
-    chat_id = payload.get("chat_id")
-    content = payload.get("content")
-    sender_id = payload.get("sender_id", "")
-    message_id = payload.get("message_id")
-    
-    if not chat_id and "from" in payload:
-        chat_id = payload["from"]
-    if not content and "text" in payload:
-        content = payload["text"]
-    if not sender_id and "sender" in payload:
-        sender_id = payload["sender"]
-        
-    if not chat_id or not content:
-        raise HTTPException(status_code=400, detail="Missing required fields: chat_id or content")
-        
-    import time
-    if not message_id:
-        import uuid
-        message_id = f"msg_{uuid.uuid4().hex}"
-        
-    from src.platforms.base import IncomingMessage
-    incoming = IncomingMessage(
-        platform=platform_name,
-        chat_id=str(chat_id),
-        message_id=str(message_id),
-        content=str(content),
-        sender_id=str(sender_id or chat_id),
-        timestamp=float(payload.get("timestamp", time.time())),
-        raw_payload=payload
-    )
-    
-    _platform_manager.submit_incoming_message(incoming)
-    return {"status": "success"}
 
 
 @app.get(
