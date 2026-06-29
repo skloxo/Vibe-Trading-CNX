@@ -315,6 +315,11 @@ export const api = {
     request<{ status: string; message: string }>("/admin/system/update", {
       method: "POST",
     }),
+
+  // Realtime quotes gateway
+  getQuoteGatewayStatus: () => request<QuoteGatewayStatus>("/api/quote/gateway/status"),
+  getRealtimeQuotes: (codes: string) => request<Record<string, QuoteDetail>>(`/api/quote/realtime?codes=${encodeURIComponent(codes)}`),
+  getRealtimeQuote: (code: string) => request<QuoteDetail>(`/api/quote/realtime/${encodeURIComponent(code)}`),
 };
 
 
@@ -1192,4 +1197,33 @@ export interface SystemVersionInfo {
   current_version: string;
   latest_version: string;
   has_update: boolean;
+}
+
+export interface QuoteDetail {
+  code: string;
+  name: string;
+  price: number;
+  last_close: number;
+  open: number;
+  high: number;
+  low: number;
+  change_amt: number;
+  change_pct: number;
+  volume: number;
+  amount: number;
+  bid: Array<{ price: number; volume: number }>;
+  ask: Array<{ price: number; volume: number }>;
+  source: string;
+}
+
+export interface QuoteGatewayStatus {
+  status: string;
+  active_connections: number;
+  latency_ms: number;
+  pool: Array<{
+    ip: string;
+    port: number;
+    latency_ms: number;
+    status: string;
+  }>;
 }

@@ -1110,6 +1110,14 @@ async def _run_startup_preflight() -> None:
     except Exception as e:
         logger.error("[XueqiuWatcher] Failed to start watcher: %s", e)
 
+    # Initialize and start TdxGateway connection pool
+    try:
+        from src.market.tdx_bridge import TdxGateway
+        TdxGateway().start()
+        logger.info("[TdxGateway] Startup connection pool initialized.")
+    except Exception as e:
+        logger.error("[TdxGateway] Failed to start connection pool: %s", e)
+
 
 @app.on_event("shutdown")
 async def _stop_scheduled_research_on_shutdown() -> None:
@@ -1132,6 +1140,14 @@ async def _stop_scheduled_research_on_shutdown() -> None:
             logger.info("[Platform] Platforms manager stopped.")
         except Exception as e:
             logger.exception("[Platform] Error stopping platforms manager: %s", e)
+
+    # Stop TdxGateway connection pool
+    try:
+        from src.market.tdx_bridge import TdxGateway
+        TdxGateway().stop()
+        logger.info("[TdxGateway] Connection pool stopped.")
+    except Exception as e:
+        logger.error("[TdxGateway] Error stopping connection pool: %s", e)
 
 
 
@@ -3852,6 +3868,60 @@ async def get_xueqiu_combos_details():
     details.sort(key=lambda x: x.get("name", ""))
     XUEQIU_COMBOS_CACHE[tenant] = (mtime, current_time, details)
     return details
+
+
+@app.get(
+    "/api/quote/realtime",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_realtime_quotes(codes: str):
+    """Batch fetch realtime L1 quotes for symbols."""
+    from src.market.tdx_bridge import TdxGateway, TdxConnectionError
+    
+    symbol_list = [s.strip() for s in codes.split(",") if s.strip()]
+    if not symbol_list:
+        return {}
+
+    gateway = TdxGateway()
+    try:
+        return gateway.get_quotes(symbol_list)
+    except TdxConnectionError:
+        logger.warning("TdxGateway failed. Falling back to Tencent HTTP for batch quotes: %s", symbol_list)
+        return gateway.fetch_tencent_quotes(symbol_list)
+    except Exception as e:
+        logger.error("Error fetching realtime quotes: %s", e)
+        return {}
+
+
+@app.get(
+    "/api/quote/realtime/{code}",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_realtime_quote(code: str):
+    """Fetch single realtime L1 quote."""
+    from src.market.tdx_bridge import TdxGateway, TdxConnectionError
+
+    gateway = TdxGateway()
+    try:
+        quotes = gateway.get_quotes([code])
+        return quotes.get(code, {})
+    except TdxConnectionError:
+        logger.warning("TdxGateway failed. Falling back to Tencent HTTP for single quote: %s", code)
+        quotes = gateway.fetch_tencent_quotes([code])
+        return quotes.get(code, {})
+    except Exception as e:
+        logger.error("Error fetching single quote %s: %s", code, e)
+        return {}
+
+
+@app.get(
+    "/api/quote/gateway/status",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_quote_gateway_status():
+    """Get status of the market quote TCP connection pool."""
+    from src.market.tdx_bridge import TdxGateway
+    return TdxGateway().get_status()
 
 
 @app.get(

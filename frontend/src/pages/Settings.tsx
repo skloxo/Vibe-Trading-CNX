@@ -1,8 +1,8 @@
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowUpCircle, Database, KeyRound, Loader2, MessageSquare, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, QrCode } from "lucide-react";
+import { ArrowUpCircle, Database, KeyRound, Loader2, MessageSquare, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, QrCode, Wifi } from "lucide-react";
 import { toast } from "sonner";
-import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type WechatChannel, type UserProfile, type TenantKey, type SystemVersionInfo } from "@/lib/api";
+import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type WechatChannel, type UserProfile, type TenantKey, type SystemVersionInfo, type QuoteGatewayStatus } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { createPortal } from "react-dom";
 import { AuthBarrier } from "@/components/layout/AuthBarrier";interface LLMFormState {
@@ -118,6 +118,31 @@ export function Settings() {
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeCountdown, setUpgradeCountdown] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  // Realtime quote gateway states
+  const [quoteStatus, setQuoteStatus] = useState<QuoteGatewayStatus | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  // Fetch Quote Gateway status (admin/local only, when in project subtab)
+  useEffect(() => {
+    let alive = true;
+    if (activeSubTab === "project") {
+      setQuoteLoading(true);
+      api.getQuoteGatewayStatus()
+        .then((data) => { if (alive) setQuoteStatus(data); })
+        .catch(() => { /* ignore */ })
+        .finally(() => { if (alive) setQuoteLoading(false); });
+    }
+    return () => { alive = false; };
+  }, [activeSubTab]);
+
+  const refreshQuoteStatus = () => {
+    setQuoteLoading(true);
+    api.getQuoteGatewayStatus()
+      .then((data) => setQuoteStatus(data))
+      .catch(() => toast.error("刷新行情网关状态失败"))
+      .finally(() => setQuoteLoading(false));
+  };
 
   useEffect(() => {
     let alive = true;
@@ -1988,6 +2013,86 @@ export function Settings() {
           <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
             点击"立即升级"后，系统将在后台执行 <code className="font-mono text-xs bg-muted px-1 rounded">update.sh</code> 拉取最新代码并平滑重启服务。页面将自动进入等待重启状态。
           </p>
+        </div>
+      )}
+
+      {/* --- Realtime Quote Gateway Card --- */}
+      {activeSubTab === "project" && quoteStatus && (
+        <div className="rounded-lg border bg-card p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <Wifi className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">实时行情网关状态</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">通达信 TCP 行情连接池与延迟监控</p>
+              </div>
+            </div>
+            <button
+              id="quote-gateway-refresh-btn"
+              type="button"
+              onClick={refreshQuoteStatus}
+              disabled={quoteLoading}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${quoteLoading ? "animate-spin" : ""}`} />
+              刷新状态
+            </button>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-md border bg-muted/10 p-3.5 flex flex-col justify-between">
+              <span className="text-xs text-muted-foreground">网关状态</span>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className={`h-2.5 w-2.5 rounded-full ${
+                  quoteStatus.status === "connected"
+                    ? "bg-success"
+                    : quoteStatus.status === "degraded"
+                    ? "bg-warning animate-pulse"
+                    : "bg-destructive"
+                }`} />
+                <span className="text-sm font-semibold">
+                  {quoteStatus.status === "connected"
+                    ? "连接正常 (TCP)"
+                    : quoteStatus.status === "degraded"
+                    ? "已降级 (Tencent HTTP)"
+                    : "未连接"}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-md border bg-muted/10 p-3.5 flex flex-col justify-between">
+              <span className="text-xs text-muted-foreground">活动连接数</span>
+              <span className="text-xl font-bold mt-1 font-mono">
+                {quoteStatus.active_connections} <span className="text-xs font-normal text-muted-foreground">/ 3</span>
+              </span>
+            </div>
+
+            <div className="rounded-md border bg-muted/10 p-3.5 flex flex-col justify-between">
+              <span className="text-xs text-muted-foreground">平均测速延迟</span>
+              <span className="text-xl font-bold mt-1 font-mono">
+                {quoteStatus.status === "degraded" ? "--" : `${quoteStatus.latency_ms} ms`}
+              </span>
+            </div>
+          </div>
+
+          {quoteStatus.pool && quoteStatus.pool.length > 0 && (
+            <div className="rounded-md border bg-muted/5 p-3 space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">活动行情服务器列表：</div>
+              <div className="divide-y divide-border/40">
+                {quoteStatus.pool.map((srv, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-1.5 text-xs">
+                    <span className="font-mono text-muted-foreground">{srv.ip}:{srv.port}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      <span className="font-mono font-medium">{srv.latency_ms} ms</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
