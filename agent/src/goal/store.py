@@ -30,7 +30,7 @@ from src.goal.models import (
 from src.goal.policy import normalize_required_text, reject_live_execution_objective
 from src.tools.path_utils import safe_document_path, safe_run_id
 
-_DEFAULT_DB_PATH = Path.home() / ".vibe-trading" / "sessions.db"
+_DEFAULT_DB_PATH = Path.home() / ".vibe-trading-cnx" / "sessions.db"
 _DB_PATH_ENV = "VIBE_TRADING_GOAL_DB_PATH"
 
 _CURRENT_STATUSES = {

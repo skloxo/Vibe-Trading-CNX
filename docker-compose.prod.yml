@@ -1,6 +1,6 @@
 services:
-  vibe-trading:
-    image: ghcr.io/skloxo/vibe-trading:main
+  vibe-trading-cnx:
+    image: ghcr.io/skloxo/vibe-trading-cnx:main
     ports:
       - "127.0.0.1:8899:8899"
     env_file:
@@ -17,20 +17,20 @@ services:
       # Requires Docker Engine >= 20.10 / Compose v2 (host-gateway support).
       - "host.docker.internal:host-gateway"
     volumes:
-      - vibe-runs:/app/agent/runs
-      - vibe-sessions:/app/agent/sessions
+      - vibe-cnx-runs:/app/agent/runs
+      - vibe-cnx-sessions:/app/agent/sessions
       # User-level agent state: persistent memory, cross-session search index
       # (sessions.db), user-created skills, shadow accounts, hypothesis
       # registry, broker connector config, agent.json. Without this volume a
       # rebuild/recreate wipes it all.
-      - vibe-home:/home/vibe/.vibe-trading
-      - vibe-swarm-runs:/app/agent/.swarm/runs
-      - vibe-uploads:/app/agent/uploads
+      - vibe-cnx-home:/home/vibe/.vibe-trading-cnx
+      - vibe-cnx-swarm-runs:/app/agent/.swarm/runs
+      - vibe-cnx-uploads:/app/agent/uploads
     restart: unless-stopped
 
 volumes:
-  vibe-runs:
-  vibe-sessions:
-  vibe-home:
-  vibe-swarm-runs:
-  vibe-uploads:
+  vibe-cnx-runs:
+  vibe-cnx-sessions:
+  vibe-cnx-home:
+  vibe-cnx-swarm-runs:
+  vibe-cnx-uploads:

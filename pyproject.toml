@@ -1,5 +1,5 @@
 [project]
-name = "vibe-trading-ai"
+name = "vibe-trading-cnx-ai"
 version = "0.1.10+s3"
 description = "A-Share & HK Equities Focus Quantitative Trading Workstation powered by Multi-Agent Swarms"
 requires-python = ">=3.11"
@@ -63,12 +63,12 @@ dependencies = [
 [project.urls]
 Homepage = "https://vibetrading.wiki/"
 Documentation = "https://vibetrading.wiki/docs/"
-Repository = "https://github.com/HKUDS/Vibe-Trading"
-Issues = "https://github.com/HKUDS/Vibe-Trading/issues"
+Repository = "https://github.com/skloxo/Vibe-Trading-CNX"
+Issues = "https://github.com/skloxo/Vibe-Trading-CNX/issues"
 
 [project.scripts]
-vibe-trading = "cli:main"
-vibe-trading-mcp = "mcp_server:main"
+vibe-trading-cnx = "cli:main"
+vibe-trading-cnx-mcp = "mcp_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "agent"}

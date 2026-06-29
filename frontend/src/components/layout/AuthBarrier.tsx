@@ -39,7 +39,7 @@ export function AuthBarrier({ onLogin }: AuthBarrierProps) {
   return (
     <div className="rounded-xl border bg-card p-6 shadow-xl space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-xl font-bold tracking-tight">Vibe-Trading 系统访问</h2>
+        <h2 className="text-xl font-bold tracking-tight">Vibe-Trading-CNX 系统访问</h2>
         <p className="text-sm text-muted-foreground">请输入密钥访问，或注册成为新租户</p>
       </div>
 

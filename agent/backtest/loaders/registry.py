@@ -104,7 +104,7 @@ def _ensure_registered() -> None:
 
 # Sources that must NEVER silently fall through to a network loader when the
 # caller asked for them explicitly. ``local`` reads the user's own configured
-# files (``~/.vibe-trading/data-bridge/config.yaml``); its ``markets`` set spans
+# files (``~/.vibe-trading-cnx/data-bridge/config.yaml``); its ``markets`` set spans
 # every market only so the cross-market auto-resolver can *reach* it, not so an
 # unavailable ``local`` request can degrade into an unrelated network source.
 # An explicit ``local`` request that is unavailable is a config problem the user
@@ -205,7 +205,7 @@ def get_loader_cls_with_fallback(source: str) -> Type[Any]:
         raise NoAvailableSourceError(
             f"Data source '{source}' is unavailable and does not fall back to a "
             f"network source. Check your local Data Bridge config "
-            f"(~/.vibe-trading/data-bridge/config.yaml) — it must exist and list "
+            f"(~/.vibe-trading-cnx/data-bridge/config.yaml) — it must exist and list "
             f"at least one source."
         )
 

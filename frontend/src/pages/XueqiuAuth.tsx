@@ -97,7 +97,7 @@ export function XueqiuAuth() {
               </div>
             </div>
             <p className="text-xs text-slate-400 bg-slate-900/40 p-3 rounded-lg border border-slate-700/50">
-              您可以安全地关闭此浏览器窗口，并返回 Vibe-Trading 主界面以开始监控组合。
+              您可以安全地关闭此浏览器窗口，并返回 Vibe-Trading-CNX 主界面以开始监控组合。
             </p>
           </div>
         ) : (
@@ -109,7 +109,7 @@ export function XueqiuAuth() {
                 <span>授权提示</span>
               </div>
               <p className="text-slate-400">
-                Vibe-Trading 量化交易工作站正在申请获取您的雪球授权令牌。授权后，系统将自动读取您的组合调仓变动。
+                Vibe-Trading-CNX 量化交易工作站正在申请获取您的雪球授权令牌。授权后，系统将自动读取您的组合调仓变动。
               </p>
               {scanned && (
                 <p className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded inline-block">

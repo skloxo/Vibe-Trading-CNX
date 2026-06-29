@@ -89,8 +89,8 @@ def _default_file_roots() -> list[Path]:
         agent_root / "runs",
         cwd / "uploads",
         cwd / "data",
-        home / ".vibe-trading" / "uploads",
-        home / ".vibe-trading" / "imports",
+        home / ".vibe-trading-cnx" / "uploads",
+        home / ".vibe-trading-cnx" / "imports",
     ]
 
 
@@ -105,8 +105,8 @@ def _default_run_roots() -> list[Path]:
         agent_root / "runs",
         swarm_runs_root(),
         cwd / "runs",
-        home / ".vibe-trading" / "shadow_runs",
-        home / ".vibe-trading" / "runs",
+        home / ".vibe-trading-cnx" / "shadow_runs",
+        home / ".vibe-trading-cnx" / "runs",
     ]
 
 
@@ -141,8 +141,8 @@ def allowed_write_roots() -> list[Path]:
         agent_root / "uploads",
         agent_root / "runs",
         cwd / "uploads",
-        home / ".vibe-trading" / "uploads",
-        home / ".vibe-trading" / "runs",
+        home / ".vibe-trading-cnx" / "uploads",
+        home / ".vibe-trading-cnx" / "runs",
     ]
 
     roots: list[Path] = []

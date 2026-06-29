@@ -274,7 +274,7 @@ def loader_cache_path(
         fields=fields,
     )
     source_dir = _sanitize_cache_segment(source)
-    return Path.home() / ".vibe-trading" / "cache" / "loaders" / source_dir / f"{key}.parquet"
+    return Path.home() / ".vibe-trading-cnx" / "cache" / "loaders" / source_dir / f"{key}.parquet"
 
 
 def loader_cache_range_is_final(end_date: str) -> bool:

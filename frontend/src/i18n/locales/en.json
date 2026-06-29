@@ -117,7 +117,7 @@
     "disconnected": "Connection lost"
   },
   "welcome": {
-    "title": "Vibe-Trading",
+    "title": "Vibe-Trading-CNX",
     "subtitle": "vibe trading with your professional financial agent team",
     "describePrompt": "Describe a trading strategy to get started.",
     "tryExample": "Try an example:",

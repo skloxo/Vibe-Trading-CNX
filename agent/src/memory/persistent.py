@@ -1,7 +1,7 @@
 """PersistentMemory: file-based cross-session memory, zero external dependencies.
 
 Storage layout:
-    ~/.vibe-trading/memory/
+    ~/.vibe-trading-cnx/memory/
     +-- MEMORY.md          # Index (< 200 lines)
     +-- user_prefs.md      # Individual memory entries with YAML frontmatter
     +-- project_btc.md
@@ -21,7 +21,7 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-MEMORY_BASE = Path.home() / ".vibe-trading" / "memory"
+MEMORY_BASE = Path.home() / ".vibe-trading-cnx" / "memory"
 MAX_INDEX_LINES = 200
 MAX_ENTRY_CHARS = 8000
 MAX_RESULTS = 5
@@ -154,7 +154,7 @@ class PersistentMemory:
         """Initialize PersistentMemory.
 
         Args:
-            memory_dir: Override memory directory (default: ~/.vibe-trading/memory/).
+            memory_dir: Override memory directory (default: ~/.vibe-trading-cnx/memory/).
         """
         from src.config.paths import get_runtime_root
         self._dir = memory_dir or (get_runtime_root() / "memory")

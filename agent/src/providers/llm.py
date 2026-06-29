@@ -284,9 +284,9 @@ else:
 
 AGENT_DIR = Path(__file__).resolve().parents[2]
 
-# .env search order: ~/.vibe-trading/.env → agent/.env → $CWD/.env
+# .env search order: ~/.vibe-trading-cnx/.env → agent/.env → $CWD/.env
 _ENV_CANDIDATES = [
-    Path.home() / ".vibe-trading" / ".env",
+    Path.home() / ".vibe-trading-cnx" / ".env",
     AGENT_DIR / ".env",
     Path.cwd() / ".env",
 ]
@@ -295,7 +295,7 @@ _ENV_CANDIDATES = [
 # .env path (it leaks the OS username / home / CWD). The label names
 # which slot won - the entire P08 R1 signal - using compile-time
 # constants only.
-_ENV_LABELS = ("~/.vibe-trading/.env", "<AGENT_DIR>/.env", "<CWD>/.env")
+_ENV_LABELS = ("~/.vibe-trading-cnx/.env", "<AGENT_DIR>/.env", "<CWD>/.env")
 
 logger = logging.getLogger(__name__)
 

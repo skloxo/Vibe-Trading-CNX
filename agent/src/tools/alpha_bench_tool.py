@@ -13,7 +13,7 @@ Output contract — JSON envelope:
      "n_skipped": int,
      "top": [{"id": ..., "ic_mean": ..., "ir": ..., ...}, ...]}
 
-Cache integrity note: the universe panel cache lives in ``~/.vibe-trading/cache/``
+Cache integrity note: the universe panel cache lives in ``~/.vibe-trading-cnx/cache/``
 as pickle blobs. Each pickle is paired with a ``<name>.sha256`` sidecar; on
 load we recompute the digest and refuse the cache on mismatch. This guards
 against accidental corruption (truncated writes, partial syncs) — it is NOT a
@@ -94,7 +94,7 @@ def _load_universe_panel(
         universe: ``csi300`` | ``sp500`` | ``btc-usdt``.
         period: ``YYYY-YYYY`` or ``YYYY-MM-DD/YYYY-MM-DD``.
         use_cache: When True (default) reuse a pickle in
-            ``~/.vibe-trading/cache/`` if the same universe+period was fetched
+            ``~/.vibe-trading-cnx/cache/`` if the same universe+period was fetched
             before. Set to False to force a re-fetch.
 
     Raises:
@@ -834,7 +834,7 @@ class AlphaBenchTool(BaseTool):
             },
             "output_dir": {
                 "type": "string",
-                "description": "Where to write the HTML report; default ~/.vibe-trading/reports/.",
+                "description": "Where to write the HTML report; default ~/.vibe-trading-cnx/reports/.",
             },
         },
         "required": ["universe", "period"],

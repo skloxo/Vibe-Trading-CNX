@@ -1,7 +1,7 @@
 """Filesystem layout for the live trading channel.
 
 All live-channel state is rooted at ``<runtime_root>/live`` (where
-``runtime_root`` defaults to ``~/.vibe-trading``, the same root the swarm
+``runtime_root`` defaults to ``~/.vibe-trading-cnx``, the same root the swarm
 config and persistent memory resolve, via :func:`src.config.paths.get_runtime_root`).
 
 Layout (see the live-trading SPEC §2)::

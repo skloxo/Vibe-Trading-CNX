@@ -250,8 +250,8 @@ def _build_keybindings(state: _CtrlCState) -> KeyBindings:
 
 
 def _default_history_path() -> Path:
-    """Where ``~/.vibe-trading/history`` lives by default."""
-    home = Path.home() / ".vibe-trading"
+    """Where ``~/.vibe-trading-cnx/history`` lives by default."""
+    home = Path.home() / ".vibe-trading-cnx"
     return home / "history"
 
 

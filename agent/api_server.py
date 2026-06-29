@@ -56,7 +56,7 @@ class _DynamicEnvPath(type(Path())):
         tenant = active_tenant_var.get()
         if tenant == "default":
             return AGENT_DIR / ".env"
-        return Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
 
     def exists(self) -> bool:
         return self._actual.exists()
@@ -103,8 +103,8 @@ XUEQIU_COMBOS_CACHE = {}  # {tenant_id: (mtime, timestamp, details)}
 
 
 def _load_tenant_keys() -> list[dict]:
-    """Load tenant API keys from ~/.vibe-trading/tenants/tenant_keys.json."""
-    path = Path.home() / ".vibe-trading" / "tenants" / "tenant_keys.json"
+    """Load tenant API keys from ~/.vibe-trading-cnx/tenants/tenant_keys.json."""
+    path = Path.home() / ".vibe-trading-cnx" / "tenants" / "tenant_keys.json"
     if not path.exists():
         return []
     try:
@@ -115,8 +115,8 @@ def _load_tenant_keys() -> list[dict]:
 
 
 def _save_tenant_keys(keys: list[dict]) -> None:
-    """Save tenant API keys to ~/.vibe-trading/tenants/tenant_keys.json."""
-    path = Path.home() / ".vibe-trading" / "tenants" / "tenant_keys.json"
+    """Save tenant API keys to ~/.vibe-trading-cnx/tenants/tenant_keys.json."""
+    path = Path.home() / ".vibe-trading-cnx" / "tenants" / "tenant_keys.json"
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(keys, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -862,7 +862,7 @@ def _get_feishu_channels_json_path() -> Path:
     tenant = active_tenant_var.get()
     if tenant == "default":
         return FEISHU_CHANNELS_JSON
-    return Path.home() / ".vibe-trading" / "tenants" / tenant / "feishu_channels.json"
+    return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / "feishu_channels.json"
 
 
 def _load_feishu_channels() -> list[dict[str, Any]]:
@@ -917,7 +917,7 @@ def _save_feishu_channels(channels: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(channels, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-WECHAT_CHANNELS_JSON = Path.home() / ".vibe-trading" / "wechat_channels.json"
+WECHAT_CHANNELS_JSON = Path.home() / ".vibe-trading-cnx" / "wechat_channels.json"
 
 def _get_wechat_channels_json_path() -> Path:
     """Get path to the WeChat channels persistent JSON file based on active tenant."""
@@ -925,7 +925,7 @@ def _get_wechat_channels_json_path() -> Path:
     tenant = active_tenant_var.get()
     if tenant == "default":
         return WECHAT_CHANNELS_JSON
-    return Path.home() / ".vibe-trading" / "tenants" / tenant / "wechat_channels.json"
+    return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / "wechat_channels.json"
 
 
 def _load_wechat_channels() -> list[dict[str, Any]]:
@@ -1152,7 +1152,7 @@ def _is_loopback_origin(origin: str) -> bool:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return False
     host = parsed.hostname.rstrip(".").lower()
-    if host == "localhost":
+    if host == "localhost" or host in _EXTRA_LOOPBACK_HOSTS:
         return True
     try:
         return ipaddress.ip_address(host).is_loopback
@@ -1658,7 +1658,7 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
     else:
         if tenant != "default":
             # Mask inherited global key
-            tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+            tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
             tenant_has_key = False
             if tenant_env.exists():
                 tenant_vals = _read_env_values(tenant_env)
@@ -1669,7 +1669,7 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
 
     is_custom = True
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if not tenant_env.exists():
             is_custom = False
         else:
@@ -1738,7 +1738,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
     iwencai_key_hint = None
     fred_api_key_hint = None
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         tenant_vals = {}
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
@@ -1752,7 +1752,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
 
     is_custom = True
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if not tenant_env.exists():
             is_custom = False
         else:
@@ -2259,7 +2259,7 @@ async def register_tenant(payload: CreateTenantKeyRequest):
     _save_tenant_keys(keys)
     
     # 4. 创建隔离目录
-    tenant_dir = Path.home() / ".vibe-trading" / "tenants" / tenant_id
+    tenant_dir = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant_id
     tenant_dir.mkdir(parents=True, exist_ok=True)
     
     # 初始化专属的配置说明文件
@@ -2305,7 +2305,7 @@ async def create_tenant_key(payload: CreateTenantKeyRequest):
     keys.append(new_key)
     _save_tenant_keys(keys)
     
-    tenant_dir = Path.home() / ".vibe-trading" / "tenants" / tenant_id
+    tenant_dir = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant_id
     tenant_dir.mkdir(parents=True, exist_ok=True)
     
     return TenantKeyItem(**new_key)
@@ -2439,7 +2439,7 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
     tenant = active_tenant_var.get()
     tenant_vals = {}
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
     else:
@@ -2505,7 +2505,7 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
     tenant = active_tenant_var.get()
     tenant_vals = {}
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
     else:
@@ -2761,7 +2761,12 @@ async def create_wechat_channel(payload: CreateWechatChannelRequest):
             
             async def _send_welcome():
                 try:
-                    await asyncio.sleep(1.5)
+                    for _ in range(5):
+                        if adapter._last_context_tokens.get(new_channel["ilink_user_id"]):
+                            break
+                        await asyncio.sleep(2.0)
+                    else:
+                        logger.warning(f"[WeChat iLink] No context token found for {new_channel['ilink_user_id']} after waiting, trying send_message anyway.")
                     await adapter.send_message(new_channel["ilink_user_id"], welcome_msg)
                     logger.warning(f"[WeChat iLink] Sent proactive welcome message to {new_channel['ilink_user_id']}")
                 except Exception as ex:
@@ -2835,7 +2840,12 @@ async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelReq
             
             async def _send_welcome():
                 try:
-                    await asyncio.sleep(1.5)
+                    for _ in range(5):
+                        if adapter._last_context_tokens.get(c["ilink_user_id"]):
+                            break
+                        await asyncio.sleep(2.0)
+                    else:
+                        logger.warning(f"[WeChat iLink] No context token found for {c['ilink_user_id']} after waiting, trying send_message anyway.")
                     await adapter.send_message(c["ilink_user_id"], welcome_msg)
                     logger.warning(f"[WeChat iLink] Sent proactive welcome message to {c['ilink_user_id']}")
                 except Exception as ex:
@@ -3105,12 +3115,17 @@ async def get_wechat_channel_status(channel_id: str):
                     async def _send_welcome():
                         try:
                             # Sleep briefly to make sure the poller loop has fully started and registered the adapter
-                            await asyncio.sleep(1.5)
+                            for _ in range(5):
+                                if adapter._last_context_tokens.get(ilink_user_id):
+                                    break
+                                await asyncio.sleep(2.0)
+                            else:
+                                logger.warning(f"[WeChat iLink] No context token found for {ilink_user_id} after waiting, trying send_message anyway.")
                             await adapter.send_message(ilink_user_id, welcome_msg)
                             logger.warning(f"[WeChat iLink] Sent proactive welcome message to {ilink_user_id}")
                         except Exception as ex:
                             import traceback
-                            logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\\n{traceback.format_exc()}")
+                            logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\n{traceback.format_exc()}")
                             
                     asyncio.create_task(_send_welcome())
                     
@@ -4247,7 +4262,7 @@ async def get_shadow_report(shadow_id: str, format: str = "html"):
     if format not in ("html", "pdf"):
         raise HTTPException(status_code=400, detail="format must be html or pdf")
 
-    reports_dir = Path.home() / ".vibe-trading" / "shadow_reports"
+    reports_dir = Path.home() / ".vibe-trading-cnx" / "shadow_reports"
     path = reports_dir / f"{shadow_id}.{format}"
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Shadow report not found: {shadow_id}.{format}")

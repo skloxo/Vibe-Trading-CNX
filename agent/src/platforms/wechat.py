@@ -8,6 +8,7 @@ import time
 import uuid
 from pathlib import Path
 from src.platforms.base import BasePlatformAdapter, IncomingMessage
+from src.config.paths import get_runtime_root
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class WechatAdapter(BasePlatformAdapter):
         self._manager = None
         self._poll_task = None
         self._ilink_sync_buf = self._load_sync_buf()
-        self._last_context_tokens = {}
+        self._last_context_tokens = self._load_context_tokens()
         self._closed = False
 
     @property
@@ -57,7 +58,7 @@ class WechatAdapter(BasePlatformAdapter):
             logger.warning(f"[WeChat iLink] Adapter '{self._name}' is unconfigured (missing token/baseurl). Poller not started.")
 
     def _load_sync_buf(self) -> str:
-        path = Path.home() / ".vibe-trading" / "sync" / f"wechat_sync_{self.tenant_id}_{self._channel_id}.txt"
+        path = get_runtime_root() / "sync" / f"wechat_sync_{self.tenant_id}_{self._channel_id}.txt"
         if path.exists():
             try:
                 return path.read_text(encoding="utf-8").strip()
@@ -66,12 +67,31 @@ class WechatAdapter(BasePlatformAdapter):
         return ""
 
     def _save_sync_buf(self, buf: str) -> None:
-        path = Path.home() / ".vibe-trading" / "sync" / f"wechat_sync_{self.tenant_id}_{self._channel_id}.txt"
+        path = get_runtime_root() / "sync" / f"wechat_sync_{self.tenant_id}_{self._channel_id}.txt"
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(buf, encoding="utf-8")
         except Exception as e:
             logger.warning(f"[WeChat iLink] Failed to save sync buffer: {e}")
+
+    def _load_context_tokens(self) -> dict[str, str]:
+        path = get_runtime_root() / "sync" / f"wechat_ctx_{self.tenant_id}_{self._channel_id}.json"
+        if path.exists():
+            try:
+                import json
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception as e:
+                logger.warning(f"[WeChat iLink] Failed to load context tokens: {e}")
+        return {}
+
+    def _save_context_tokens(self) -> None:
+        path = get_runtime_root() / "sync" / f"wechat_ctx_{self.tenant_id}_{self._channel_id}.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            import json
+            path.write_text(json.dumps(self._last_context_tokens, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"[WeChat iLink] Failed to save context tokens: {e}")
 
     def _generate_uin_headers(self) -> dict:
         uin_str = str(random.randint(0, 4294967295))
@@ -141,6 +161,7 @@ class WechatAdapter(BasePlatformAdapter):
                     
                     if ctx_token and from_user:
                         self._last_context_tokens[from_user] = ctx_token
+                        self._save_context_tokens()
                         
                     items = msg.get("item_list", [])
                     for item in items:
