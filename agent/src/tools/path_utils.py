@@ -81,53 +81,33 @@ def _configured_file_roots() -> list[Path]:
 
 def _default_file_roots() -> list[Path]:
     """Return default roots for uploaded/imported user files."""
-    from src.config.paths import get_runtime_root, active_tenant_var
     cwd = Path.cwd().resolve()
+    home = Path.home().resolve()
     agent_root = _agent_root()
-    runtime_root = get_runtime_root()
-    tenant = active_tenant_var.get()
-    if tenant == "default":
-        return [
-            agent_root / "uploads",
-            agent_root / "runs",
-            cwd / "uploads",
-            cwd / "data",
-            runtime_root / "uploads",
-            runtime_root / "imports",
-            # Allow access to all user-generated content under ~/.vibe-trading/ or tenant equivalent
-            runtime_root,
-        ]
-    else:
-        return [
-            runtime_root / "uploads",
-            runtime_root / "imports",
-            runtime_root,
-        ]
+    return [
+        agent_root / "uploads",
+        agent_root / "runs",
+        cwd / "uploads",
+        cwd / "data",
+        home / ".vibe-trading-cnx" / "uploads",
+        home / ".vibe-trading-cnx" / "imports",
+    ]
 
 
 def _default_run_roots() -> list[Path]:
     """Return default roots for generated backtest/tool run directories."""
     from src.swarm.store import swarm_runs_root
-    from src.config.paths import get_runtime_root, active_tenant_var
 
-    runtime_root = get_runtime_root()
-    tenant = active_tenant_var.get()
-    if tenant == "default":
-        cwd = Path.cwd().resolve()
-        agent_root = _agent_root()
-        return [
-            agent_root / "runs",
-            swarm_runs_root(),
-            cwd / "runs",
-            runtime_root / "shadow_runs",
-            runtime_root / "runs",
-        ]
-    else:
-        return [
-            swarm_runs_root(),
-            runtime_root / "shadow_runs",
-            runtime_root / "runs",
-        ]
+    cwd = Path.cwd().resolve()
+    home = Path.home().resolve()
+    agent_root = _agent_root()
+    return [
+        agent_root / "runs",
+        swarm_runs_root(),
+        cwd / "runs",
+        home / ".vibe-trading-cnx" / "shadow_runs",
+        home / ".vibe-trading-cnx" / "runs",
+    ]
 
 
 def allowed_file_roots() -> list[Path]:
@@ -138,6 +118,97 @@ def allowed_file_roots() -> list[Path]:
         if resolved not in roots:
             roots.append(resolved)
     return roots
+
+
+_ALLOWED_WRITE_ROOTS_ENV = "VIBE_TRADING_ALLOWED_WRITE_ROOTS"
+
+
+def allowed_write_roots() -> list[Path]:
+    """Return all roots allowed for file writes and edits."""
+    raw = os.getenv(_ALLOWED_WRITE_ROOTS_ENV, "")
+    configured: list[Path] = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        _rejects_unc(item)
+        configured.append(Path(item).expanduser().resolve())
+
+    cwd = Path.cwd().resolve()
+    home = Path.home().resolve()
+    agent_root = _agent_root()
+    defaults = [
+        agent_root / "uploads",
+        agent_root / "runs",
+        cwd / "uploads",
+        home / ".vibe-trading-cnx" / "uploads",
+        home / ".vibe-trading-cnx" / "runs",
+    ]
+
+    roots: list[Path] = []
+    for root in [*defaults, *configured]:
+        resolved = root.resolve()
+        if resolved not in roots:
+            roots.append(resolved)
+    return roots
+
+
+def resolve_safe_path(
+    file_path: str,
+    run_dir: str | None,
+    allowed_roots: list[Path],
+    *,
+    purpose: str = "workspace",
+) -> Path:
+    """Resolve a file path under run_dir with fallback to allowed roots.
+
+    Args:
+        file_path: Relative or absolute path (supports tilde expansion).
+        run_dir: Optional run directory to resolve against.
+        allowed_roots: List of fallback allowed root directories.
+        purpose: Context name for error messages.
+
+    Returns:
+        Absolute resolved Path.
+
+    Raises:
+        ValueError: If path cannot be resolved or escapes boundaries.
+    """
+    _rejects_unc(file_path)
+
+    # Try resolving against run_dir if provided
+    if run_dir:
+        try:
+            run_root = safe_run_dir(run_dir)
+        except ValueError as exc:
+            # If safe_run_dir fails, check if the path is in allowed_roots first
+            candidate = Path(file_path).expanduser().resolve()
+            for root in allowed_roots:
+                if candidate.is_relative_to(root):
+                    return candidate
+            raise exc
+
+        try:
+            return safe_path(file_path, run_root)
+        except ValueError as exc:
+            # Fallback to allowed roots if safe_path containment fails
+            candidate = Path(file_path).expanduser().resolve()
+            for root in allowed_roots:
+                if candidate.is_relative_to(root):
+                    return candidate
+            raise ValueError(
+                f"Path {file_path!r} escapes run_dir {run_dir!r} and is not in allowed {purpose} roots."
+            ) from exc
+
+    # If no run_dir, path must resolve inside one of the allowed roots
+    candidate = Path(file_path).expanduser().resolve()
+    for root in allowed_roots:
+        if candidate.is_relative_to(root):
+            return candidate
+
+    raise ValueError(
+        f"run_dir is required to write/edit {file_path!r}, or the path must resolve inside allowed {purpose} roots."
+    )
 
 
 def _allowed_run_roots() -> list[Path]:

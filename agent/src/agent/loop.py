@@ -1,7 +1,7 @@
 """AgentLoop: ReAct core loop.
 
 Five-layer context management:
-  Layer 1 (microcompact)     — silently prunes old tool results each iteration
+  Layer 1 (microcompact)     — prunes old tool results once under memory pressure
   Layer 2 (context_collapse) — folds long text blocks without LLM call (zero cost)
   Layer 3 (auto_compact)     — LLM structured summary with token-budget tail protection
   Layer 4 (compact tool)     — model explicitly calls the compact tool to trigger L3
@@ -37,6 +37,11 @@ from src.goal.context import (
     goal_progress_tuple,
 )
 from src.providers.chat import ChatLLM, ProviderStreamError
+from src.providers.content_filter import (
+    CONTENT_FILTER_SKIP_MESSAGE,
+    MAX_CONSECUTIVE_CONTENT_FILTER_SKIPS,
+    compute_content_filter_warnings,
+)
 from src.tools.background_tools import get_background_manager
 from src.tools.redaction import redact_payload
 
@@ -51,6 +56,12 @@ STREAM_RETRY_DELAY_S = float(os.getenv("VT_STREAM_RETRY_DELAY_S", "1.0"))
 TOOL_TIMEOUT_SECONDS = float(os.getenv("VIBE_TRADING_TOOL_TIMEOUT_SECONDS", "1800"))
 GOAL_MAX_CONTINUATIONS = int(os.getenv("VIBE_TRADING_GOAL_MAX_CONTINUATIONS", "3"))
 LLM_USAGE_ARTIFACT = "llm_usage.json"
+
+# Layer 1: microcompact only prunes old tool results once the transcript is
+# under real memory pressure. Below this it would clear tool history on every
+# iteration even on short runs, discarding results the model may still need to
+# reference (metrics, file contents, search hits).
+MICROCOMPACT_THRESHOLD = int(TOKEN_THRESHOLD * 0.5)
 
 # Layer 2: Context collapse thresholds
 COLLAPSE_THRESHOLD = int(TOKEN_THRESHOLD * 0.7)
@@ -531,6 +542,9 @@ class AgentLoop:
 
         iteration = 0
         final_content = ""
+        content_filter_count = 0
+        consecutive_content_filter_count = 0
+        content_filter_circuit_breaker = False
         empty_model_response_iter: int | None = None
         llm_usage_summary = _new_llm_usage_summary(self.llm)
         goal_continuations = 0
@@ -555,11 +569,19 @@ class AgentLoop:
                     notif_text = "\n".join(f"[bg:{n['task_id']}] {n['status']}: {n['result']}" for n in notifs)
                     messages.append({"role": "user", "content": f"<background-results>\n{notif_text}\n</background-results>\n\n<system>Continue processing with the background results above.</system>"})
 
-                # Layer 1: microcompact (every iteration)
-                _microcompact(messages)
+                # Estimate transcript size once; each compaction layer below
+                # escalates only when its own token threshold is crossed.
+                tokens = estimate_tokens(messages)
+
+                # Layer 1: microcompact — prune old tool results only under
+                # memory pressure, so short, low-pressure runs keep their full
+                # tool history available for the model to reference instead of
+                # having every result past the most recent few cleared.
+                if tokens > MICROCOMPACT_THRESHOLD:
+                    _microcompact(messages)
+                    tokens = estimate_tokens(messages)
 
                 # Layer 2: context collapse (fold long text, zero API cost)
-                tokens = estimate_tokens(messages)
                 if tokens > COLLAPSE_THRESHOLD:
                     _context_collapse(messages)
                     tokens = estimate_tokens(messages)
@@ -721,6 +743,32 @@ class AgentLoop:
                     )
                     self._emit("thinking_done", {"iter": current_iter, "content": thinking_text[:500]})
 
+                # Content-filter skip: provider blocked the response — continue
+                # to the next iteration instead of finalising on empty/garbage
+                # content.  Checked *before* the tool-call branch so a filtered
+                # response never executes its (likely empty) tool calls.
+                # Use getattr for duck-typed response objects from mock LLMs.
+                if getattr(response, "content_filter_triggered", False):
+                    content_filter_count += 1
+                    consecutive_content_filter_count += 1
+                    if consecutive_content_filter_count >= MAX_CONSECUTIVE_CONTENT_FILTER_SKIPS:
+                        trace.write({
+                            "type": "content_filter_circuit_breaker",
+                            "iter": current_iter,
+                            "count": content_filter_count,
+                        })
+                        content_filter_circuit_breaker = True
+                        break
+                    trace.write({"type": "content_filter_skipped", "iter": current_iter})
+                    messages.append({
+                        "role": "system",
+                        "content": CONTENT_FILTER_SKIP_MESSAGE,
+                    })
+                    continue
+
+                # Not filtered — reset the consecutive-skip counter.
+                consecutive_content_filter_count = 0
+
                 if not response.has_tool_calls:
                     final_content = response.content or ""
                     if not final_content:
@@ -866,6 +914,14 @@ class AgentLoop:
             final_reason = "cancelled by user"
             state_store.mark_failure(run_dir, final_reason)
             final_status = "cancelled"
+        elif content_filter_circuit_breaker:
+            final_reason = (
+                f"content_filter_circuit_breaker: "
+                f"{MAX_CONSECUTIVE_CONTENT_FILTER_SKIPS} consecutive LLM "
+                "responses were blocked by content moderation"
+            )
+            state_store.mark_failure(run_dir, final_reason)
+            final_status = "failed"
         elif (run_dir / "artifacts" / "metrics.csv").exists() or final_content:
             state_store.mark_success(run_dir)
             final_status = "success"
@@ -908,6 +964,13 @@ class AgentLoop:
         }
         if final_reason is not None:
             result["reason"] = final_reason
+
+        cf_warnings = compute_content_filter_warnings(
+            content_filter_count, max(1, iteration),
+        )
+        if cf_warnings:
+            result["content_filter_warnings"] = cf_warnings
+
         return result
 
     # -- Tool execution with read/write batching --------------------------------

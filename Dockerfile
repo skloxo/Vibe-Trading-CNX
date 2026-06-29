@@ -1,13 +1,13 @@
 # ============================================================================
-# Stage 1: Build frontend (Skipped, using prebuilt host files)
+# Stage 1: Build frontend
 # ============================================================================
-# FROM node:20-slim AS frontend-build
-# 
-# WORKDIR /app/frontend
-# COPY frontend/package.json frontend/package-lock.json ./
-# RUN npm ci --ignore-scripts
-# COPY frontend/ ./
-# RUN npm run build
+FROM node:20-slim AS frontend-build
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY frontend/ ./
+RUN npm run build
 
 # ============================================================================
 # Stage 2: Python runtime
@@ -49,7 +49,7 @@ COPY pyproject.toml LICENSE README.md ./
 COPY agent/ agent/
 
 # Copy built frontend
-COPY frontend/dist frontend/dist
+COPY --from=frontend-build /app/frontend/dist frontend/dist
 
 # Install CLI entrypoint
 RUN pip install --no-cache-dir -e .
@@ -57,8 +57,9 @@ RUN pip install --no-cache-dir -e .
 # Runtime should not run as root. Keep writable app data directories owned by
 # the service user so named Docker volumes inherit usable permissions.
 RUN useradd --create-home --shell /usr/sbin/nologin vibe \
-    && mkdir -p agent/runs agent/sessions agent/uploads agent/.swarm/runs /home/vibe/.vibe-trading \
-    && chown -R vibe:vibe /app /home/vibe/.vibe-trading
+    && mkdir -p agent/runs agent/sessions agent/uploads agent/.swarm/runs /home/vibe/.vibe-trading-cnx \
+    && ln -s /home/vibe/.vibe-trading-cnx /home/vibe/.vibe-trading \
+    && chown -R vibe:vibe /app /home/vibe/.vibe-trading-cnx
 USER vibe
 
 # Default port
@@ -69,4 +70,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8899/health')" || exit 1
 
 # Run API server (serves frontend/dist as static files)
-CMD ["vibe-trading", "serve", "--host", "0.0.0.0", "--port", "8899"]
+CMD ["vibe-trading-cnx", "serve", "--host", "0.0.0.0", "--port", "8899"]

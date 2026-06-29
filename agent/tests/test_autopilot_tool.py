@@ -54,7 +54,7 @@ def test_generate_backtest_config_writes_safe_config(
     assert payload["config"]["codes"] == ["399006.SZ"]
     assert payload["config"]["source"] == "local"
     run_dir = Path(payload["run_dir"])
-    assert run_dir.parent == tmp_path / ".vibe-trading" / "runs"
+    assert run_dir.parent == tmp_path / ".vibe-trading-cnx" / "runs"
     assert run_dir.name.startswith("autopilot_")
     assert (run_dir / "code").is_dir()
     config = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
@@ -78,7 +78,7 @@ def test_generate_backtest_config_rejects_invalid_date_before_write(
 
     assert payload["status"] == "error"
     assert "start_date" in payload["error"]
-    assert not (tmp_path / ".vibe-trading" / "runs").exists()
+    assert not (tmp_path / ".vibe-trading-cnx" / "runs").exists()
 
 
 def test_run_research_autopilot_uses_host_injected_session_id(
@@ -126,7 +126,7 @@ def test_generate_backtest_config_run_dir_passes_safe_run_dir(
     """The returned run_dir must be accepted by safe_run_dir.
 
     Regression for the high-severity defect: the tool wrote run_dir under
-    ~/.vibe-trading/runs, which safe_run_dir rejected, so the advertised
+    ~/.vibe-trading-cnx/runs, which safe_run_dir rejected, so the advertised
     write_file -> backtest handoff could never execute.
     """
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))

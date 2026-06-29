@@ -201,7 +201,8 @@ function BrowseView() {
     return alphas.filter(
       (a) =>
         a.id.toLowerCase().includes(q) ||
-        (a.nickname || "").toLowerCase().includes(q),
+        (a.nickname || "").toLowerCase().includes(q) ||
+        (a.nickname_zh || "").toLowerCase().includes(q),
     );
   }, [alphas, search]);
 
@@ -413,9 +414,9 @@ function BrowseView() {
                       >
                         {a.id}
                       </Link>
-                      {a.nickname && (
+                      {(a.nickname_zh || a.nickname) && (
                         <span className="ml-2 text-muted-foreground font-sans">
-                          {a.nickname}
+                          {a.nickname_zh || a.nickname}
                         </span>
                       )}
                     </td>
@@ -515,7 +516,9 @@ function DetailView({ alphaId }: DetailProps) {
   const a = detail.alpha;
   const meta = a.meta || {};
   const formulaLatex = (meta["formula_latex"] as string | undefined) || "";
-  const nickname = (meta["nickname"] as string | undefined) || "";
+  const nickname = (meta["nickname_zh"] as string | undefined) || (meta["nickname"] as string | undefined) || "";
+  const descriptionZh = (meta["description_zh"] as string | undefined);
+  const usageZh = (meta["usage_zh"] as string | undefined);
   const firstUniverse = ((meta["universe"] as string[] | undefined) || [])[0] || "";
 
   // Keep period in sync with the BenchView form default so the prefilled
@@ -596,7 +599,13 @@ function DetailView({ alphaId }: DetailProps) {
               <MetaRow label={i18n.t("alphaZoo.minWarmupBars")} value={metaString(meta, "min_warmup_bars")} />
               <MetaRow label={i18n.t("alphaZoo.requiresSector")} value={metaString(meta, "requires_sector")} />
               <MetaRow label={i18n.t("alphaZoo.modulePath")} value={a.module_path || "—"} />
-              <MetaRow label={i18n.t("alphaZoo.notes")} value={metaString(meta, "notes")} last />
+              <MetaRow label={i18n.t("alphaZoo.notes")} value={metaString(meta, "notes")} last={!descriptionZh && !usageZh} />
+              {descriptionZh && (
+                <MetaRow label="因子说明" value={descriptionZh} last={!usageZh} />
+              )}
+              {usageZh && (
+                <MetaRow label="典型用途" value={usageZh} last />
+              )}
             </tbody>
           </table>
         </div>

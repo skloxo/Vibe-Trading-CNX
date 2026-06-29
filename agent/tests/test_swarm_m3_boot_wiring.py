@@ -9,16 +9,16 @@ The contract this file defends:
 
   * ``VIBE_TRADING_SWARM_AGENT_CONFIG`` env var, when set, wins absolutely —
     even if neighbouring ``swarm-agent.json`` / ``agent.json`` exist on disk.
-  * Without the env var, ``~/.vibe-trading/swarm-agent.json`` (the swarm-
+  * Without the env var, ``~/.vibe-trading-cnx/swarm-agent.json`` (the swarm-
     specific operator file) is preferred over ``agent.json``.
-  * Without either swarm-specific file, ``~/.vibe-trading/agent.json``
+  * Without either swarm-specific file, ``~/.vibe-trading-cnx/agent.json``
     (the main-agent config) is reused as a sane default — operators with a
     single-config setup don't have to duplicate it.
   * With nothing on disk and no env var, the resolver returns ``None`` so the
     runtime keeps today's local-only behaviour byte-for-byte (R-03).
 
 Tests use ``tmp_path`` to redirect the runtime root so they never touch the
-real ``~/.vibe-trading`` directory of whoever is running the suite.
+real ``~/.vibe-trading-cnx`` directory of whoever is running the suite.
 """
 
 from __future__ import annotations

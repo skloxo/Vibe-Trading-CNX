@@ -14,6 +14,8 @@ import logging
 import os
 import re
 import signal
+import threading
+from collections import deque
 import time
 import csv
 import uuid
@@ -48,15 +50,15 @@ AGENT_DIR = Path(__file__).resolve().parent
 
 class _DynamicEnvPath(type(Path())):
     def __new__(cls):
-        return super().__new__(cls, AGENT_DIR / ".env")
+        return super().__new__(cls, Path.home() / ".vibe-trading-cnx" / ".env")
 
     @property
     def _actual(self) -> Path:
         from src.config.paths import active_tenant_var
         tenant = active_tenant_var.get()
         if tenant == "default":
-            return AGENT_DIR / ".env"
-        return Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+            return Path.home() / ".vibe-trading-cnx" / ".env"
+        return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
 
     def exists(self) -> bool:
         return self._actual.exists()
@@ -94,16 +96,60 @@ ENV_PATH = _DynamicEnvPath()
 ENV_EXAMPLE_PATH = AGENT_DIR / ".env.example"
 
 
+class MemoryLogHandler(logging.Handler):
+    """Thread-safe logging handler that retains the last N logs in memory."""
+    def __init__(self, maxlen: int = 1000):
+        super().__init__()
+        self._logs = deque(maxlen=maxlen)
+        self._lock = threading.Lock()
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            msg = self.format(record)
+            log_entry = {
+                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": msg,
+            }
+            with self._lock:
+                self._logs.append(log_entry)
+        except Exception:
+            self.handleError(record)
+
+    def get_logs(self, limit: int = 100, level: Optional[str] = None, keyword: Optional[str] = None):
+        with self._lock:
+            results = list(self._logs)
+        if level:
+            level_upper = level.upper()
+            results = [log for log in results if log["level"] == level_upper]
+        if keyword:
+            keyword_lower = keyword.lower()
+            results = [
+                log for log in results
+                if keyword_lower in log["message"].lower() or keyword_lower in log["logger"].lower()
+            ]
+        return results[-limit:]
+
+
+memory_log_handler = MemoryLogHandler()
+memory_log_handler.setFormatter(logging.Formatter("%(message)s"))
+memory_log_handler.setLevel(logging.INFO)
+logging.getLogger().addHandler(memory_log_handler)
+
+
+
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 _UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 console = Console()
 logger = logging.getLogger(__name__)
+XUEQIU_COMBOS_CACHE = {}  # {tenant_id: (mtime, timestamp, details)}
 
 
 def _load_tenant_keys() -> list[dict]:
-    """Load tenant API keys from ~/.vibe-trading/tenants/tenant_keys.json."""
-    path = Path.home() / ".vibe-trading" / "tenants" / "tenant_keys.json"
+    """Load tenant API keys from ~/.vibe-trading-cnx/tenants/tenant_keys.json."""
+    path = Path.home() / ".vibe-trading-cnx" / "tenants" / "tenant_keys.json"
     if not path.exists():
         return []
     try:
@@ -114,8 +160,8 @@ def _load_tenant_keys() -> list[dict]:
 
 
 def _save_tenant_keys(keys: list[dict]) -> None:
-    """Save tenant API keys to ~/.vibe-trading/tenants/tenant_keys.json."""
-    path = Path.home() / ".vibe-trading" / "tenants" / "tenant_keys.json"
+    """Save tenant API keys to ~/.vibe-trading-cnx/tenants/tenant_keys.json."""
+    path = Path.home() / ".vibe-trading-cnx" / "tenants" / "tenant_keys.json"
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(keys, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -269,6 +315,22 @@ class UpdateTenantKeyRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
+class MonitorStatsResponse(BaseModel):
+    """Service monitoring statistics."""
+    active_tenants: List[Dict[str, Any]]
+    total_sessions: int
+    total_runs: int
+    memory_usage_mb: float
+
+
+class LogEntry(BaseModel):
+    """Single log entry details."""
+    timestamp: str
+    level: str
+    logger: str
+    message: str
+
+
 class LLMSettingsResponse(BaseModel):
     """Current LLM runtime settings."""
 
@@ -302,6 +364,37 @@ class UpdateLLMSettingsRequest(BaseModel):
     max_retries: int = Field(2, ge=0, le=20)
     reasoning_effort: Optional[str] = None
     use_default: bool = False
+
+
+class XueqiuSettingsResponse(BaseModel):
+    """Xueqiu portfolio monitoring settings."""
+    enabled: bool = False
+    feishu_webhook: str = ""
+    combos: Dict[str, str] = Field(default_factory=dict)
+    xq_tokens: List[str] = Field(default_factory=list)
+    watch_uids: Dict[str, str] = Field(default_factory=dict)
+
+
+class UpdateXueqiuSettingsRequest(BaseModel):
+    """Request payload to update Xueqiu monitoring settings."""
+    enabled: bool
+    feishu_webhook: str = ""
+    combos: Dict[str, str] = Field(default_factory=dict)
+    xq_tokens: List[str] = Field(default_factory=list)
+    watch_uids: Dict[str, str] = Field(default_factory=dict)
+
+
+class TestXueqiuWebhookRequest(BaseModel):
+    """Request payload to test Xueqiu Feishu Webhook."""
+    webhook_url: str
+
+
+class ConfirmQRCodeRequest(BaseModel):
+    """Request payload to confirm Xueqiu QR code scan login."""
+    qrcode_id: str
+    token: str
+
+
 
 
 class DataSourceSettingsResponse(BaseModel):
@@ -361,6 +454,40 @@ class UpdateFeishuChannelRequest(BaseModel):
     allowed_users: Optional[str] = ""
     allow_all_users: bool = False
     enabled: bool = True
+
+
+class WechatChannelResponse(BaseModel):
+    """Detailed information for a single WeChat channel."""
+    id: str
+    name: str
+    mode: str = "ilink"
+    enabled: bool
+    ilink_bot_token: Optional[str] = ""
+    ilink_base_url: Optional[str] = ""
+    ilink_bot_id: Optional[str] = ""
+    ilink_user_id: Optional[str] = ""
+
+
+class CreateWechatChannelRequest(BaseModel):
+    """Payload to create a new WeChat channel."""
+    name: str
+    mode: str = "ilink"
+    enabled: bool = True
+    ilink_bot_token: Optional[str] = ""
+    ilink_base_url: Optional[str] = ""
+    ilink_bot_id: Optional[str] = ""
+    ilink_user_id: Optional[str] = ""
+
+
+class UpdateWechatChannelRequest(BaseModel):
+    """Payload to update an existing WeChat channel."""
+    name: str
+    mode: str = "ilink"
+    enabled: bool = True
+    ilink_bot_token: Optional[str] = None
+    ilink_base_url: Optional[str] = None
+    ilink_bot_id: Optional[str] = None
+    ilink_user_id: Optional[str] = None
 
 
 class FeatureFlagsResponse(BaseModel):
@@ -796,7 +923,7 @@ def _get_feishu_channels_json_path() -> Path:
     tenant = active_tenant_var.get()
     if tenant == "default":
         return FEISHU_CHANNELS_JSON
-    return Path.home() / ".vibe-trading" / "tenants" / tenant / "feishu_channels.json"
+    return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / "feishu_channels.json"
 
 
 def _load_feishu_channels() -> list[dict[str, Any]]:
@@ -851,16 +978,47 @@ def _save_feishu_channels(channels: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(channels, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+WECHAT_CHANNELS_JSON = Path.home() / ".vibe-trading-cnx" / "wechat_channels.json"
+
+def _get_wechat_channels_json_path() -> Path:
+    """Get path to the WeChat channels persistent JSON file based on active tenant."""
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+    if tenant == "default":
+        return WECHAT_CHANNELS_JSON
+    return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / "wechat_channels.json"
+
+
+def _load_wechat_channels() -> list[dict[str, Any]]:
+    """Load WeChat channels from the persistent JSON file."""
+    channels = []
+    path = _get_wechat_channels_json_path()
+    if path.exists():
+        try:
+            channels = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error("Failed to read %s: %s", path, e)
+    return channels
+
+
+def _save_wechat_channels(channels: list[dict[str, Any]]) -> None:
+    """Save WeChat channels to the persistent JSON file."""
+    path = _get_wechat_channels_json_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(channels, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 async def _reload_platform_manager() -> None:
     """Stop the running platform manager and start it with the latest active channel adapters."""
     global _platform_manager
     session_service = _get_session_service()
+    logger.warning("[Platform] Reloading platform manager (session_service=%s)...", session_service is not None)
     if session_service:
         try:
             if _platform_manager:
                 await _platform_manager.stop()
             
-            from src.platforms import PlatformManager, FeishuAdapter
+            from src.platforms import PlatformManager, FeishuAdapter, WechatAdapter
             _platform_manager = PlatformManager(session_service, tenant_id="default")
             
             tenants = ["default"]
@@ -878,6 +1036,8 @@ async def _reload_platform_manager() -> None:
             try:
                 for t in tenants:
                     active_tenant_var.set(t)
+                    
+                    # 1. Load Feishu channels
                     channels = _load_feishu_channels()
                     for chan in channels:
                         if chan.get("enabled", True):
@@ -892,17 +1052,44 @@ async def _reload_platform_manager() -> None:
                             )
                             _platform_manager.register_adapter(adapter)
                             registered_count += 1
+
+                    # 2. Load WeChat channels
+                    wechat_chans = _load_wechat_channels()
+                    for wchan in wechat_chans:
+                        if wchan.get("enabled", True):
+                            w_adapter = WechatAdapter(
+                                channel_id=wchan["id"],
+                                name=wchan["name"],
+                                ilink_bot_token=wchan.get("ilink_bot_token", ""),
+                                ilink_base_url=wchan.get("ilink_base_url", ""),
+                                ilink_bot_id=wchan.get("ilink_bot_id", ""),
+                                ilink_user_id=wchan.get("ilink_user_id", ""),
+                                tenant_id=t,
+                            )
+                            _platform_manager.register_adapter(w_adapter)
+                            registered_count += 1
             finally:
                 active_tenant_var.set(original_tenant)
 
-            if registered_count > 0:
-                logger.info(f"[Platform] Registered and started {registered_count} Feishu adapter(s) across all active tenants.")
+            logger.warning(f"[Platform] Registered {registered_count} adapter(s) across all active tenants. Starting...")
             await _platform_manager.start()
+            logger.warning(f"[Platform] Platform manager started successfully.")
         except Exception as e:
             logger.exception("[Platform] Failed to reload platform manager: %s", e)
 
 
 _platform_manager = None
+_xueqiu_watcher = None
+XUEQIU_QR_SESSIONS = {}
+
+
+
+def _get_xueqiu_watcher():
+    global _xueqiu_watcher
+    if _xueqiu_watcher is None:
+        from src.platforms.xueqiu_watcher import XueqiuWatcher
+        _xueqiu_watcher = XueqiuWatcher()
+    return _xueqiu_watcher
 
 
 @app.on_event("startup")
@@ -916,11 +1103,27 @@ async def _run_startup_preflight() -> None:
     # Initialize Platform Manager for multi-channel messaging (e.g. Feishu Bot)
     await _reload_platform_manager()
 
+    # Initialize and start Xueqiu combinations watcher
+    try:
+        _get_xueqiu_watcher().start()
+        logger.info("[XueqiuWatcher] Startup check completed.")
+    except Exception as e:
+        logger.error("[XueqiuWatcher] Failed to start watcher: %s", e)
+
 
 @app.on_event("shutdown")
 async def _stop_scheduled_research_on_shutdown() -> None:
     """Stop the scheduled research executor on server shutdown."""
     await _stop_scheduled_research_executor()
+
+    # Stop Xueqiu combinations watcher
+    global _xueqiu_watcher
+    if _xueqiu_watcher:
+        try:
+            await _xueqiu_watcher.stop()
+            logger.info("[XueqiuWatcher] Watcher stopped.")
+        except Exception as e:
+            logger.error("[XueqiuWatcher] Error stopping watcher: %s", e)
 
     global _platform_manager
     if _platform_manager:
@@ -1010,7 +1213,7 @@ def _is_loopback_origin(origin: str) -> bool:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return False
     host = parsed.hostname.rstrip(".").lower()
-    if host == "localhost":
+    if host == "localhost" or host in _EXTRA_LOOPBACK_HOSTS:
         return True
     try:
         return ipaddress.ip_address(host).is_loopback
@@ -1018,19 +1221,43 @@ def _is_loopback_origin(origin: str) -> bool:
         return False
 
 
+def _origin_matches_request_host(origin: str, request: Request) -> bool:
+    """Return whether ``origin`` is the same site serving this request."""
+    try:
+        parsed = urllib.parse.urlsplit(origin)
+    except ValueError:
+        return False
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+
+    origin_host = parsed.hostname.rstrip(".").lower()
+    origin_port = parsed.port
+    request_host = _host_without_port(request.headers.get("host", ""))
+    if origin_host != request_host:
+        return False
+
+    if origin_port is None:
+        origin_port = 443 if parsed.scheme == "https" else 80
+    request_port = request.url.port
+    if request_port is None:
+        request_port = 443 if request.url.scheme == "https" else 80
+    return origin_port == request_port
+
+
 def _reject_cross_site_browser_request(request: Request) -> None:
-    """Reject unsafe browser requests from non-loopback origins.
+    """Reject unsafe browser requests from untrusted cross-site origins.
 
     CORS protects response reads, not blind form/fetch side effects. Keep local
-    CLI/curl clients working while refusing browser-originated cross-site POSTs
-    to local control-plane actions such as shutdown.
+    CLI/curl clients and same-origin browser UI deployments working while
+    refusing browser-originated cross-site POSTs to local control-plane actions
+    such as shutdown.
     """
     sec_fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if sec_fetch_site == "cross-site":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
 
     origin = request.headers.get("origin")
-    if origin and not _is_loopback_origin(origin):
+    if origin and not (_is_loopback_origin(origin) or _origin_matches_request_host(origin, request)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-site request denied")
 
 
@@ -1388,7 +1615,9 @@ def _read_settings_env_values() -> Dict[str, str]:
     if not isinstance(ENV_PATH, _DynamicEnvPath):
         admin_env = ENV_PATH
     else:
-        admin_env = AGENT_DIR / ".env"
+        admin_env = Path.home() / ".vibe-trading-cnx" / ".env"
+        if not admin_env.exists():
+            admin_env = AGENT_DIR / ".env"
 
     base_values = {}
     if admin_env.exists():
@@ -1493,16 +1722,20 @@ def _coerce_int(value: str, default: int) -> int:
         return default
 
 
-def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLMSettingsResponse:
+def _build_llm_settings_response(values: Optional[Dict[str, str]] = None, is_public: bool = False) -> LLMSettingsResponse:
     """Build the public settings payload from dotenv values."""
-    env_values = values if values is not None else _read_settings_env_values()
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+
+    if is_public and tenant != "default":
+        env_values = values if values is not None else (_read_env_values(ENV_PATH) if ENV_PATH.exists() else {})
+    else:
+        env_values = values if values is not None else _read_settings_env_values()
+
     provider_name = env_values.get("LANGCHAIN_PROVIDER", "openai").strip().lower()
     provider = LLM_PROVIDER_BY_NAME.get(provider_name, LLM_PROVIDER_BY_NAME["openai"])
     api_key = env_values.get(provider.api_key_env or "", "") if provider.api_key_env else ""
     api_key_configured = _is_configured_secret(api_key, LLM_API_KEY_PLACEHOLDERS)
-    
-    from src.config.paths import active_tenant_var
-    tenant = active_tenant_var.get()
     
     api_key_hint = None
     if provider.auth_type == "oauth":
@@ -1514,9 +1747,9 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
         api_key_configured = bool(token)
         api_key_hint = None
     else:
-        if tenant != "default":
+        if tenant != "default" and not is_public:
             # Mask inherited global key
-            tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+            tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
             tenant_has_key = False
             if tenant_env.exists():
                 tenant_vals = _read_env_values(tenant_env)
@@ -1527,7 +1760,7 @@ def _build_llm_settings_response(values: Optional[Dict[str, str]] = None) -> LLM
 
     is_custom = True
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if not tenant_env.exists():
             is_custom = False
         else:
@@ -1571,9 +1804,16 @@ IWENCAI_KEY_PLACEHOLDERS: set[str] = {"", "your-iwencai-key"}
 FRED_API_KEY_PLACEHOLDERS: set[str] = {"", "your-fred-api-key"}
 
 
-def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None) -> DataSourceSettingsResponse:
+def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None, is_public: bool = False) -> DataSourceSettingsResponse:
     """Build the public data source settings payload."""
-    env_values = values if values is not None else _read_settings_env_values()
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+
+    if is_public and tenant != "default":
+        env_values = values if values is not None else (_read_env_values(ENV_PATH) if ENV_PATH.exists() else {})
+    else:
+        env_values = values if values is not None else _read_settings_env_values()
+
     token = env_values.get("TUSHARE_TOKEN", "")
     token_configured = _is_configured_secret(token, TUSHARE_TOKEN_PLACEHOLDERS)
     iwencai_key = env_values.get("VIBE_TRADING_IWENCAI_KEY", "")
@@ -1589,14 +1829,11 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
     else:
         baostock_message = "No BaoStock loader is registered in this project."
 
-    from src.config.paths import active_tenant_var
-    tenant = active_tenant_var.get()
-    
     tushare_token_hint = None
     iwencai_key_hint = None
     fred_api_key_hint = None
-    if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+    if tenant != "default" and not is_public:
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         tenant_vals = {}
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
@@ -1610,7 +1847,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
 
     is_custom = True
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if not tenant_env.exists():
             is_custom = False
         else:
@@ -2068,7 +2305,7 @@ async def get_settings_profile(request: Request):
     from src.config.paths import active_tenant_var
     tenant = active_tenant_var.get()
     role = "admin" if tenant == "default" else "tenant"
-    name = None
+    name = "Admin"
     if tenant != "default":
         for item in _load_tenant_keys():
             if item.get("tenant_id") == tenant:
@@ -2117,7 +2354,7 @@ async def register_tenant(payload: CreateTenantKeyRequest):
     _save_tenant_keys(keys)
     
     # 4. 创建隔离目录
-    tenant_dir = Path.home() / ".vibe-trading" / "tenants" / tenant_id
+    tenant_dir = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant_id
     tenant_dir.mkdir(parents=True, exist_ok=True)
     
     # 初始化专属的配置说明文件
@@ -2163,7 +2400,7 @@ async def create_tenant_key(payload: CreateTenantKeyRequest):
     keys.append(new_key)
     _save_tenant_keys(keys)
     
-    tenant_dir = Path.home() / ".vibe-trading" / "tenants" / tenant_id
+    tenant_dir = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant_id
     tenant_dir.mkdir(parents=True, exist_ok=True)
     
     return TenantKeyItem(**new_key)
@@ -2215,23 +2452,21 @@ async def delete_tenant_key(tenant_id: str):
 async def get_system_version(request: Request):
     """Get the current and latest Git repository version."""
     import subprocess
-    
+
     current_ver = APP_VERSION
     if not current_ver.startswith("v"):
         current_ver = f"v{current_ver}"
-        
+
     latest_ver = current_ver
     has_update = False
-    
+
     try:
-        # Run git fetch in the background/sync with timeout
         subprocess.run(
-            ["git", "fetch", "--tags"], 
-            capture_output=True, 
+            ["git", "fetch", "--tags"],
+            capture_output=True,
             timeout=3,
             cwd=str(AGENT_DIR.parent)
         )
-        # Get latest tag
         res = subprocess.run(
             ["git", "describe", "--tags", "--abbrev=0"],
             capture_output=True,
@@ -2246,7 +2481,7 @@ async def get_system_version(request: Request):
                 has_update = (latest_ver != current_ver)
     except Exception:
         pass
-        
+
     return {
         "current_version": current_ver,
         "latest_version": latest_ver,
@@ -2259,10 +2494,10 @@ async def get_system_version(request: Request):
     dependencies=[Depends(require_admin)],
 )
 async def trigger_system_update(request: Request):
-    """Trigger system update in the background."""
+    """Trigger system update in the background via update.sh."""
     import subprocess
     import shutil
-    
+
     update_script = AGENT_DIR.parent / "update.sh"
     if not update_script.exists():
         update_script = AGENT_DIR / "update.sh"
@@ -2271,20 +2506,20 @@ async def trigger_system_update(request: Request):
                 status_code=500,
                 detail="Update script (update.sh) not found in workspace."
             )
-            
+
     success = False
-    
-    # Try using systemd-run first if systemd is available
     if shutil.which("systemd-run"):
         try:
-            cmd = ["systemd-run", "--user", "bash", str(update_script)]
-            res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(AGENT_DIR.parent), timeout=5)
+            res = subprocess.run(
+                ["systemd-run", "--user", "bash", str(update_script)],
+                capture_output=True, text=True,
+                cwd=str(AGENT_DIR.parent), timeout=5
+            )
             if res.returncode == 0:
                 success = True
         except Exception:
             pass
-            
-    # Fallback to subprocess.Popen with start_new_session=True
+
     if not success:
         try:
             subprocess.Popen(
@@ -2300,11 +2535,83 @@ async def trigger_system_update(request: Request):
                 status_code=500,
                 detail=f"Failed to execute update script: {str(e)}"
             )
-            
+
     return {
         "status": "updating",
-        "message": "System update triggered in the background. Service will restart shortly."
+        "message": "System update triggered. Service will restart shortly."
     }
+
+
+@app.get(
+    "/admin/monitor/stats",
+    response_model=MonitorStatsResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def get_monitor_stats():
+    """Get service metrics, database runs, sessions, and active tenants."""
+    import os
+    # 1. Active tenants
+    keys = _load_tenant_keys()
+    active_tenants = [
+        {
+            "tenant_id": k.get("tenant_id"),
+            "name": k.get("name"),
+            "created_at": k.get("created_at"),
+            "is_active": k.get("is_active", True)
+        }
+        for k in keys
+    ]
+    
+    # 2. Total sessions
+    total_sessions = 0
+    if SESSIONS_DIR.exists():
+        try:
+            total_sessions = sum(1 for d in SESSIONS_DIR.iterdir() if d.is_dir())
+        except Exception:
+            pass
+            
+    # 3. Total runs
+    total_runs = 0
+    if RUNS_DIR.exists():
+        try:
+            total_runs = sum(1 for d in RUNS_DIR.iterdir() if d.is_dir())
+        except Exception:
+            pass
+            
+    # 4. Memory usage
+    memory_usage_mb = 0.0
+    try:
+        if os.path.exists("/proc/self/status"):
+            with open("/proc/self/status", "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            memory_usage_mb = float(parts[1]) / 1024.0
+                            break
+    except Exception:
+        pass
+        
+    return MonitorStatsResponse(
+        active_tenants=active_tenants,
+        total_sessions=total_sessions,
+        total_runs=total_runs,
+        memory_usage_mb=memory_usage_mb,
+    )
+
+
+@app.get(
+    "/admin/monitor/logs",
+    response_model=List[LogEntry],
+    dependencies=[Depends(require_admin)],
+)
+async def get_monitor_logs(
+    limit: int = Query(100, ge=1, le=1000),
+    level: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+):
+    """Retrieve uvicorn root logs from the MemoryLogHandler."""
+    return memory_log_handler.get_logs(limit=limit, level=level, keyword=keyword)
 
 
 @app.get(
@@ -2312,16 +2619,18 @@ async def trigger_system_update(request: Request):
     response_model=LLMSettingsResponse,
     dependencies=[Depends(require_local_or_auth)],
 )
-async def get_llm_settings():
+async def get_llm_settings(request: Request):
     """Return project-local LLM settings for the Web UI."""
-    return _build_llm_settings_response()
+    is_public = not _is_local_or_lan_client(request)
+    return _build_llm_settings_response(is_public=is_public)
 
 
 @app.put("/settings/llm", response_model=LLMSettingsResponse, dependencies=[Depends(require_settings_write_auth)])
-async def update_llm_settings(payload: UpdateLLMSettingsRequest):
+async def update_llm_settings(request: Request, payload: UpdateLLMSettingsRequest):
     """Persist project-local LLM settings and update the running process."""
     from src.config.paths import active_tenant_var
     tenant = active_tenant_var.get()
+    is_public = not _is_local_or_lan_client(request)
 
     if payload.use_default:
         if tenant != "default":
@@ -2349,7 +2658,7 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
             _delete_env_values(ENV_PATH, LLM_KEYS_TO_CLEAN)
             for key in LLM_KEYS_TO_CLEAN:
                 os.environ.pop(key, None)
-            return _build_llm_settings_response(_read_settings_env_values())
+            return _build_llm_settings_response(_read_settings_env_values(), is_public=is_public)
         else:
             raise HTTPException(status_code=400, detail="Admin cannot revert to global default")
 
@@ -2396,7 +2705,7 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
     tenant = active_tenant_var.get()
     tenant_vals = {}
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
     else:
@@ -2422,7 +2731,7 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
 
     _write_env_values(ENV_PATH, updates)
     _sync_runtime_env(provider, updates)
-    return _build_llm_settings_response(_read_env_values(ENV_PATH))
+    return _build_llm_settings_response(_read_env_values(ENV_PATH), is_public=is_public)
 
 
 
@@ -2431,9 +2740,10 @@ async def update_llm_settings(payload: UpdateLLMSettingsRequest):
     response_model=DataSourceSettingsResponse,
     dependencies=[Depends(require_local_or_auth)],
 )
-async def get_data_source_settings():
+async def get_data_source_settings(request: Request):
     """Return project-local data source credentials for the Web UI."""
-    return _build_data_source_settings_response()
+    is_public = not _is_local_or_lan_client(request)
+    return _build_data_source_settings_response(is_public=is_public)
 
 
 @app.put(
@@ -2441,10 +2751,11 @@ async def get_data_source_settings():
     response_model=DataSourceSettingsResponse,
     dependencies=[Depends(require_settings_write_auth)],
 )
-async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
+async def update_data_source_settings(request: Request, payload: UpdateDataSourceSettingsRequest):
     """Persist project-local data source credentials and update the running process."""
     from src.config.paths import active_tenant_var
     tenant = active_tenant_var.get()
+    is_public = not _is_local_or_lan_client(request)
 
     if payload.use_default:
         if tenant != "default":
@@ -2452,7 +2763,7 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
             _delete_env_values(ENV_PATH, DATA_SOURCE_KEYS)
             for key in DATA_SOURCE_KEYS:
                 os.environ.pop(key, None)
-            return _build_data_source_settings_response(_read_settings_env_values())
+            return _build_data_source_settings_response(_read_settings_env_values(), is_public=is_public)
         else:
             raise HTTPException(status_code=400, detail="Admin cannot revert to global default")
 
@@ -2462,7 +2773,7 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
     tenant = active_tenant_var.get()
     tenant_vals = {}
     if tenant != "default":
-        tenant_env = Path.home() / ".vibe-trading" / "tenants" / tenant / ".env"
+        tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         if tenant_env.exists():
             tenant_vals = _read_env_values(tenant_env)
     else:
@@ -2524,7 +2835,7 @@ async def update_data_source_settings(payload: UpdateDataSourceSettingsRequest):
         else:
             os.environ.pop("FRED_API_KEY", None)
 
-    return _build_data_source_settings_response(_read_env_values(ENV_PATH))
+    return _build_data_source_settings_response(_read_env_values(ENV_PATH), is_public=is_public)
 
 
 FEISHU_SECRET_PLACEHOLDERS: set[str] = {"", "your-feishu-app-secret"}
@@ -2655,6 +2966,448 @@ async def delete_feishu_channel(channel_id: str):
     return {"status": "success"}
 
 
+active_ilink_logins: dict[str, dict] = {}
+
+
+@app.get(
+    "/settings/platforms/wechat/channels",
+    response_model=List[WechatChannelResponse],
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def list_wechat_channels():
+    """Return all WeChat channels configuration."""
+    channels = _load_wechat_channels()
+    return [
+        WechatChannelResponse(
+            id=c["id"],
+            name=c["name"],
+            mode="ilink",
+            enabled=c.get("enabled", True),
+            ilink_bot_token=c.get("ilink_bot_token", ""),
+            ilink_base_url=c.get("ilink_base_url", ""),
+            ilink_bot_id=c.get("ilink_bot_id", ""),
+            ilink_user_id=c.get("ilink_user_id", ""),
+        )
+        for c in channels
+    ]
+
+
+@app.post(
+    "/settings/platforms/wechat/channels",
+    response_model=WechatChannelResponse,
+    dependencies=[Depends(require_settings_write_auth)],
+)
+async def create_wechat_channel(payload: CreateWechatChannelRequest):
+    """Add a new WeChat channel configuration."""
+    import secrets
+    channels = _load_wechat_channels()
+    
+    new_id = f"chan_{secrets.token_hex(4)}"
+    new_channel = {
+        "id": new_id,
+        "name": payload.name.strip() or f"微信通道_{new_id[:4]}",
+        "mode": "ilink",
+        "enabled": payload.enabled,
+        "ilink_bot_token": (payload.ilink_bot_token or "").strip(),
+        "ilink_base_url": (payload.ilink_base_url or "https://ilinkai.weixin.qq.com").strip(),
+        "ilink_bot_id": (payload.ilink_bot_id or "").strip(),
+        "ilink_user_id": (payload.ilink_user_id or "").strip(),
+    }
+    
+    channels.append(new_channel)
+    _save_wechat_channels(channels)
+    
+    await _reload_platform_manager()
+    
+    if payload.enabled and new_channel["ilink_user_id"]:
+        from src.config.paths import active_tenant_var
+        tid = active_tenant_var.get() or "default"
+        adapter_key = f"wechat_{tid}_{new_channel['id']}"
+        if _platform_manager and adapter_key in _platform_manager._adapters:
+            adapter = _platform_manager._adapters[adapter_key]
+            welcome_msg = "你好，我是量化金融研究助手，我已经成功接收到您的消息并连接成功。"
+            
+            async def _send_welcome():
+                try:
+                    for _ in range(5):
+                        if adapter._last_context_tokens.get(new_channel["ilink_user_id"]):
+                            break
+                        await asyncio.sleep(2.0)
+                    else:
+                        logger.warning(f"[WeChat iLink] No context token found for {new_channel['ilink_user_id']} after waiting, trying send_message anyway.")
+                    await adapter.send_message(new_channel["ilink_user_id"], welcome_msg)
+                    logger.warning(f"[WeChat iLink] Sent proactive welcome message to {new_channel['ilink_user_id']}")
+                except Exception as ex:
+                    import traceback
+                    logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\n{traceback.format_exc()}")
+                    
+            asyncio.create_task(_send_welcome())
+    
+    return WechatChannelResponse(
+        id=new_channel["id"],
+        name=new_channel["name"],
+        mode="ilink",
+        enabled=new_channel["enabled"],
+        ilink_bot_token=new_channel["ilink_bot_token"],
+        ilink_base_url=new_channel["ilink_base_url"],
+        ilink_bot_id=new_channel["ilink_bot_id"],
+        ilink_user_id=new_channel["ilink_user_id"],
+    )
+
+
+@app.put(
+    "/settings/platforms/wechat/channels/{channel_id}",
+    response_model=WechatChannelResponse,
+    dependencies=[Depends(require_settings_write_auth)],
+)
+async def update_wechat_channel(channel_id: str, payload: UpdateWechatChannelRequest):
+    """Update an existing WeChat channel configuration."""
+    channels = _load_wechat_channels()
+    target_idx = None
+    for idx, c in enumerate(channels):
+        if c["id"] == channel_id:
+            target_idx = idx
+            break
+            
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail="WeChat channel not found")
+        
+    c = channels[target_idx]
+    c["name"] = payload.name.strip()
+    c["mode"] = "ilink"
+    c["enabled"] = payload.enabled
+    
+    old_token = c.get("ilink_bot_token", "")
+    old_user_id = c.get("ilink_user_id", "")
+    old_enabled = c.get("enabled", False)
+
+    if payload.ilink_bot_token is not None:
+        c["ilink_bot_token"] = payload.ilink_bot_token.strip()
+    if payload.ilink_base_url is not None:
+        c["ilink_base_url"] = payload.ilink_base_url.strip() or "https://ilinkai.weixin.qq.com"
+    if payload.ilink_bot_id is not None:
+        c["ilink_bot_id"] = payload.ilink_bot_id.strip()
+    if payload.ilink_user_id is not None:
+        c["ilink_user_id"] = payload.ilink_user_id.strip()
+            
+    _save_wechat_channels(channels)
+    
+    await _reload_platform_manager()
+
+    token_changed = (payload.ilink_bot_token is not None and payload.ilink_bot_token.strip() != old_token)
+    user_id_changed = (payload.ilink_user_id is not None and payload.ilink_user_id.strip() != old_user_id)
+    enabled_changed = (payload.enabled != old_enabled)
+
+    if c["enabled"] and c["ilink_user_id"] and (token_changed or user_id_changed or (enabled_changed and c["enabled"])):
+        from src.config.paths import active_tenant_var
+        tid = active_tenant_var.get() or "default"
+        adapter_key = f"wechat_{tid}_{c['id']}"
+        if _platform_manager and adapter_key in _platform_manager._adapters:
+            adapter = _platform_manager._adapters[adapter_key]
+            welcome_msg = "你好，我是量化金融研究助手，我已经成功接收到您的消息并连接成功。"
+            
+            async def _send_welcome():
+                try:
+                    for _ in range(5):
+                        if adapter._last_context_tokens.get(c["ilink_user_id"]):
+                            break
+                        await asyncio.sleep(2.0)
+                    else:
+                        logger.warning(f"[WeChat iLink] No context token found for {c['ilink_user_id']} after waiting, trying send_message anyway.")
+                    await adapter.send_message(c["ilink_user_id"], welcome_msg)
+                    logger.warning(f"[WeChat iLink] Sent proactive welcome message to {c['ilink_user_id']}")
+                except Exception as ex:
+                    import traceback
+                    logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\n{traceback.format_exc()}")
+                    
+            asyncio.create_task(_send_welcome())
+    
+    return WechatChannelResponse(
+        id=c["id"],
+        name=c["name"],
+        mode="ilink",
+        enabled=c["enabled"],
+        ilink_bot_token=c.get("ilink_bot_token", ""),
+        ilink_base_url=c.get("ilink_base_url", ""),
+        ilink_bot_id=c.get("ilink_bot_id", ""),
+        ilink_user_id=c.get("ilink_user_id", ""),
+    )
+
+
+@app.delete(
+    "/settings/platforms/wechat/channels/{channel_id}",
+    dependencies=[Depends(require_settings_write_auth)],
+)
+async def delete_wechat_channel(channel_id: str):
+    """Delete a WeChat channel configuration."""
+    channels = _load_wechat_channels()
+    initial_len = len(channels)
+    channels = [c for c in channels if c["id"] != channel_id]
+    
+    if len(channels) == initial_len:
+        raise HTTPException(status_code=404, detail="WeChat channel not found")
+        
+    _save_wechat_channels(channels)
+    
+    await _reload_platform_manager()
+    
+    return {"status": "success"}
+
+
+active_transient_logins: dict[str, dict] = {}
+
+
+@app.get(
+    "/settings/platforms/wechat/transient/qrcode",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_wechat_transient_qrcode(mode: str = "ilink"):
+    """Fetch WeChat login QR code transiently without requiring an existing channel."""
+    import secrets
+    import time
+    import httpx
+    import urllib.parse
+
+    temp_id = f"temp_{secrets.token_hex(8)}"
+
+    if mode == "ilink":
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.post(
+                    "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3",
+                    json={"local_token_list": []},
+                    timeout=10,
+                )
+                res.raise_for_status()
+                data = res.json()
+            qrcode = data.get("qrcode")
+            qrcode_img_content = data.get("qrcode_img_content")
+            if qrcode and qrcode_img_content:
+                active_transient_logins[temp_id] = {
+                    "qrcode": qrcode,
+                    "qrcode_url": qrcode_img_content,
+                    "started_at": time.time(),
+                    "api_base_url": "https://ilinkai.weixin.qq.com",
+                    "mode": "ilink",
+                }
+                qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote_plus(qrcode_img_content)}"
+                return {"status": "waiting", "qrcode": qr_image_url, "temp_id": temp_id}
+            else:
+                raise HTTPException(status_code=500, detail="微信 iLink 官方网关返回空数据，请稍后重试。")
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            logger.exception("Failed to fetch official iLink QR code")
+            raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}\nTraceback:\n{tb}")
+
+    raise HTTPException(status_code=400, detail="Unsupported mode")
+
+
+@app.get(
+    "/settings/platforms/wechat/transient/status",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_wechat_transient_status(temp_id: str):
+    """Fetch WeChat login status transiently."""
+    login_context = active_transient_logins.get(temp_id)
+    if not login_context:
+        return {"status": "waiting"}
+
+    mode = login_context.get("mode")
+    if mode == "ilink":
+        qrcode = login_context["qrcode"]
+        api_base_url = login_context.get("api_base_url", "https://ilinkai.weixin.qq.com")
+
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                res = await client.get(
+                    f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
+                )
+                res.raise_for_status()
+                data = res.json()
+        except Exception as e:
+            logger.warning("Failed to poll official iLink QR status: %s", e)
+            return {"status": "waiting"}
+
+        try:
+            status = data.get("status")
+            if status == "scaned_but_redirect" and data.get("redirect_host"):
+                new_host = f"https://{data.get('redirect_host')}"
+                login_context["api_base_url"] = new_host
+                return {"status": "scanned"}
+            elif status == "wait":
+                return {"status": "waiting"}
+            elif status == "scaned":
+                return {"status": "scanned"}
+            elif status == "expired":
+                return {"status": "expired"}
+            elif status in ("confirmed", "binded_redirect"):
+                bot_token = data.get("bot_token")
+                baseurl = data.get("baseurl") or api_base_url
+                ilink_bot_id = data.get("ilink_bot_id")
+                ilink_user_id = data.get("ilink_user_id")
+
+                active_transient_logins.pop(temp_id, None)
+
+                return {
+                    "status": "success",
+                    "bot_token": bot_token,
+                    "baseurl": baseurl,
+                    "ilink_bot_id": ilink_bot_id,
+                    "ilink_user_id": ilink_user_id,
+                }
+        except Exception as e:
+            logger.warning("Failed to process official iLink QR status data: %s", e)
+            return {"status": "waiting"}
+
+    return {"status": "waiting"}
+
+
+@app.get(
+    "/settings/platforms/wechat/channels/{channel_id}/qrcode",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_wechat_channel_qrcode(channel_id: str):
+    """Fetch WeChat login QR code from the iLink official gateway."""
+    channels = _load_wechat_channels()
+    channel = next((c for c in channels if c["id"] == channel_id), None)
+    if not channel:
+        raise HTTPException(status_code=404, detail="微信通道不存在")
+        
+    import httpx
+    import time
+    
+    token = channel.get("ilink_bot_token", "").strip()
+    local_tokens = [token] if token else []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3",
+                json={"local_token_list": local_tokens},
+                timeout=10,
+            )
+            res.raise_for_status()
+            data = res.json()
+        qrcode = data.get("qrcode")
+        qrcode_img_content = data.get("qrcode_img_content")
+        if qrcode and qrcode_img_content:
+            active_ilink_logins[channel_id] = {
+                "qrcode": qrcode,
+                "qrcode_url": qrcode_img_content,
+                "started_at": time.time(),
+                "api_base_url": "https://ilinkai.weixin.qq.com",
+            }
+            import urllib.parse
+            qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote_plus(qrcode_img_content)}"
+            return {"status": "waiting", "qrcode": qr_image_url}
+        else:
+            raise HTTPException(status_code=500, detail="微信 iLink 官方网关返回空数据，请稍后重试。")
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.exception("Failed to fetch official iLink QR code")
+        raise HTTPException(status_code=500, detail=f"获取微信官方 iLink 二维码失败: {e}\nTraceback:\n{tb}")
+
+
+@app.get(
+    "/settings/platforms/wechat/channels/{channel_id}/status",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_wechat_channel_status(channel_id: str):
+    """Fetch WeChat login status from the iLink official gateway."""
+    channels = _load_wechat_channels()
+    channel = next((c for c in channels if c["id"] == channel_id), None)
+    if not channel:
+        raise HTTPException(status_code=404, detail="WeChat channel not found")
+        
+    login_context = active_ilink_logins.get(channel_id)
+    if not login_context:
+        return {"status": "waiting"}
+        
+    qrcode = login_context["qrcode"]
+    api_base_url = login_context.get("api_base_url", "https://ilinkai.weixin.qq.com")
+    
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(
+                f"{api_base_url}/ilink/bot/get_qrcode_status?qrcode={qrcode}",
+            )
+            res.raise_for_status()
+            data = res.json()
+    except Exception as e:
+        logger.warning("Failed to poll official iLink QR status: %s", e)
+        return {"status": "waiting"}
+
+    try:
+        status = data.get("status")
+        if status == "scaned_but_redirect" and data.get("redirect_host"):
+            new_host = f"https://{data.get('redirect_host')}"
+            login_context["api_base_url"] = new_host
+            return {"status": "scanned"}
+        elif status == "wait":
+            return {"status": "waiting"}
+        elif status == "scaned":
+            return {"status": "scanned"}
+        elif status == "expired":
+            return {"status": "expired"}
+        elif status in ("confirmed", "binded_redirect"):
+            bot_token = data.get("bot_token")
+            baseurl = data.get("baseurl") or api_base_url
+            ilink_bot_id = data.get("ilink_bot_id")
+            ilink_user_id = data.get("ilink_user_id")
+            
+            for c in channels:
+                if c["id"] == channel_id:
+                    if bot_token:
+                        c["ilink_bot_token"] = bot_token
+                    if baseurl:
+                        c["ilink_base_url"] = baseurl
+                    if ilink_bot_id:
+                        c["ilink_bot_id"] = ilink_bot_id
+                    if ilink_user_id:
+                        c["ilink_user_id"] = ilink_user_id
+                    c["enabled"] = True
+                    break
+            _save_wechat_channels(channels)
+            active_ilink_logins.pop(channel_id, None)
+            
+            await _reload_platform_manager()
+            
+            if ilink_user_id:
+                from src.config.paths import active_tenant_var
+                tid = active_tenant_var.get() or "default"
+                adapter_key = f"wechat_{tid}_{channel_id}"
+                if _platform_manager and adapter_key in _platform_manager._adapters:
+                    adapter = _platform_manager._adapters[adapter_key]
+                    welcome_msg = "你好，我是量化金融研究助手，我已经成功接收到您的消息并连接成功。"
+                    
+                    async def _send_welcome():
+                        try:
+                            # Sleep briefly to make sure the poller loop has fully started and registered the adapter
+                            for _ in range(5):
+                                if adapter._last_context_tokens.get(ilink_user_id):
+                                    break
+                                await asyncio.sleep(2.0)
+                            else:
+                                logger.warning(f"[WeChat iLink] No context token found for {ilink_user_id} after waiting, trying send_message anyway.")
+                            await adapter.send_message(ilink_user_id, welcome_msg)
+                            logger.warning(f"[WeChat iLink] Sent proactive welcome message to {ilink_user_id}")
+                        except Exception as ex:
+                            import traceback
+                            logger.error(f"[WeChat iLink] Failed to send welcome message: {type(ex).__name__}: {ex}\n{traceback.format_exc()}")
+                            
+                    asyncio.create_task(_send_welcome())
+                    
+            return {"status": "logged_in"}
+    except Exception as e:
+        logger.warning("Failed to process official iLink QR status data: %s", e)
+        return {"status": "waiting"}
+    return {"status": "waiting"}
+
+
 @app.get(
     "/settings/feature-flags",
     response_model=FeatureFlagsResponse,
@@ -2678,6 +3431,527 @@ async def health_check():
         service="Vibe-Trading API",
         timestamp=datetime.now().isoformat()
     )
+
+
+@app.get(
+    "/settings/xueqiu",
+    response_model=XueqiuSettingsResponse,
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_xueqiu_settings():
+    """Return Xueqiu portfolio monitoring settings for the Web UI."""
+    from src.config.paths import get_data_dir
+    path = get_data_dir() / "xueqiu_monitor.json"
+    if not path.exists():
+        return XueqiuSettingsResponse()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return XueqiuSettingsResponse(**data)
+    except Exception as e:
+        logger.error("Failed to load Xueqiu settings: %s", e)
+        return XueqiuSettingsResponse()
+
+
+def initialize_new_combos_task(added_combos: dict, xq_tokens: list, data_dir):
+    """Background task to query and populate historical rebalancing logs for newly added combos."""
+    if not added_combos:
+        return
+    watcher = _get_xueqiu_watcher()
+    if not watcher:
+        return
+        
+    tokens = [t.strip() for t in xq_tokens if t.strip()]
+    if not tokens:
+        tokens = DEFAULT_XQ_TOKENS
+        
+    for name, cid in added_combos.items():
+        try:
+            logger.info("Background initializing history for combo %s (%s)", name, cid)
+            watcher.initialize_combo_history(cid, name, tokens, data_dir)
+        except Exception as e:
+            logger.error("Failed to initialize combo history in background for %s: %s", cid, e)
+
+
+def initialize_new_influencers_task(added_influencers: dict, xq_tokens: list, data_dir):
+    """Background task to query and save initial watchlist snapshot for newly added influencers."""
+    if not added_influencers:
+        return
+    watcher = _get_xueqiu_watcher()
+    if not watcher:
+        return
+    tokens = [t.strip() for t in xq_tokens if t.strip()]
+    if not tokens:
+        tokens = DEFAULT_XQ_TOKENS
+    for name, uid in added_influencers.items():
+        try:
+            logger.info("Background initializing watchlist snapshot for influencer %s (%s)", name, uid)
+            watcher.initialize_influencer_watchlist(uid, name, tokens, data_dir)
+        except Exception as e:
+            logger.error("Failed to initialize watchlist snapshot in background for %s: %s", uid, e)
+
+
+@app.put(
+    "/settings/xueqiu",
+    response_model=XueqiuSettingsResponse,
+    dependencies=[Depends(require_settings_write_auth)],
+)
+async def update_xueqiu_settings(payload: UpdateXueqiuSettingsRequest, background_tasks: BackgroundTasks):
+    """Persist Xueqiu portfolio monitoring settings."""
+    from src.config.paths import get_data_dir
+    data_dir = get_data_dir()
+    path = data_dir / "xueqiu_monitor.json"
+    
+    # Detect new combos
+    old_combos = {}
+    old_watch_uids = {}
+    if path.exists():
+        try:
+            old_data = json.loads(path.read_text(encoding="utf-8"))
+            old_combos = old_data.get("combos", {})
+            old_watch_uids = old_data.get("watch_uids", {})
+        except Exception:
+            pass
+            
+    # Detect combos and influencers that need history/snapshot initialization
+    logs_path = data_dir / "xueqiu_rebalancing_logs.json"
+    existing_combo_ids = set()
+    if logs_path.exists():
+        try:
+            existing_logs = json.loads(logs_path.read_text(encoding="utf-8")) or []
+            existing_combo_ids = {r.get("combo_id") for r in existing_logs if isinstance(r, dict) and r.get("combo_id")}
+        except Exception:
+            pass
+            
+    new_combos = payload.combos or {}
+    added_combos = {}
+    for name, cid in new_combos.items():
+        if cid not in old_combos.values() or cid not in existing_combo_ids:
+            added_combos[name] = cid
+
+    snapshots_path = data_dir / "xueqiu_watchlist_snapshots.json"
+    existing_watch_uids = set()
+    if snapshots_path.exists():
+        try:
+            existing_snaps = json.loads(snapshots_path.read_text(encoding="utf-8")) or {}
+            existing_watch_uids = set(existing_snaps.keys())
+        except Exception:
+            pass
+            
+    new_watch_uids = payload.watch_uids or {}
+    added_influencers = {}
+    for name, uid in new_watch_uids.items():
+        if uid not in old_watch_uids.values() or uid not in existing_watch_uids:
+            added_influencers[name] = uid
+    
+    data = {
+        "enabled": payload.enabled,
+        "feishu_webhook": payload.feishu_webhook,
+        "combos": payload.combos,
+        "xq_tokens": payload.xq_tokens,
+        "watch_uids": payload.watch_uids,
+    }
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        logger.error("Failed to save Xueqiu settings: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {e}")
+        
+    if added_combos:
+        background_tasks.add_task(initialize_new_combos_task, added_combos, payload.xq_tokens, data_dir)
+        
+    if added_influencers:
+        background_tasks.add_task(initialize_new_influencers_task, added_influencers, payload.xq_tokens, data_dir)
+        
+    return XueqiuSettingsResponse(**data)
+
+
+@app.post(
+    "/settings/xueqiu/test",
+    dependencies=[Depends(require_settings_write_auth)],
+)
+async def test_xueqiu_webhook(payload: TestXueqiuWebhookRequest):
+    """Send a test interactive card to verify the Feishu Webhook configuration."""
+    watcher = _get_xueqiu_watcher()
+    success = await watcher.test_webhook(payload.webhook_url)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to deliver test card. Please check the Webhook URL.")
+    return {"status": "success"}
+
+
+@app.get(
+    "/settings/xueqiu/logs",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_xueqiu_logs():
+    """Return Xueqiu portfolio rebalancing logs for the Web UI."""
+    from src.config.paths import get_data_dir
+    path = get_data_dir() / "xueqiu_rebalancing_logs.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error("Failed to load Xueqiu logs: %s", e)
+        return []
+
+
+@app.get(
+    "/settings/xueqiu/inject",
+)
+async def inject_xueqiu_token(token: str, redirect: bool = False, key: str = None):
+    """Directly inject a Xueqiu token from a bookmarklet or script."""
+    from fastapi import Response
+    from fastapi.responses import RedirectResponse
+    from src.config.paths import active_tenant_var
+    
+    if key:
+        keys_list = _load_tenant_keys()
+        for k in keys_list:
+            if k.get("key") == key:
+                active_tenant_var.set(k["tenant_id"])
+                break
+                
+    token = token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token cannot be empty")
+        
+    from src.config.paths import get_data_dir
+    data_dir = get_data_dir()
+    path = data_dir / "xueqiu_monitor.json"
+    
+    data = {"enabled": False, "feishu_webhook": "", "combos": {}, "xq_tokens": []}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+            
+    tokens = data.get("xq_tokens", [])
+    if token not in tokens:
+        tokens.append(token)
+        data["xq_tokens"] = tokens
+        try:
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.error("Failed to inject token: %s", e)
+            raise HTTPException(status_code=500, detail=f"Failed to inject token: {e}")
+            
+    if redirect:
+        return RedirectResponse(url="/xueqiu")
+
+    # Return JSON with CORS headers to bypass browser restrictions silently
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*"
+    }
+    return Response(
+        content=json.dumps({"status": "success"}),
+        media_type="application/json",
+        headers=headers
+    )
+
+
+@app.get(
+    "/settings/xueqiu/combos/details",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_xueqiu_combos_details():
+    """Fetch current quote and holding details for all monitored portfolios of this tenant."""
+    import json
+    import random
+    import requests
+    import concurrent.futures
+    import time
+    from src.config.paths import get_data_dir
+    from src.platforms.xueqiu_watcher import USER_AGENT_POOL, DEFAULT_XQ_TOKENS
+    
+    data_dir = get_data_dir()
+    config_path = data_dir / "xueqiu_monitor.json"
+    
+    if not config_path.exists():
+        return []
+        
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error("Failed to read config: %s", e)
+        return []
+        
+    combos = config.get("combos", {})
+    if not combos:
+        return []
+        
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+    mtime = config_path.stat().st_mtime if config_path.exists() else 0
+    current_time = time.time()
+    
+    if tenant in XUEQIU_COMBOS_CACHE:
+        cached_mtime, cached_time, cached_details = XUEQIU_COMBOS_CACHE[tenant]
+        if cached_mtime == mtime and (current_time - cached_time < 300):
+            logger.info("Serving xueqiu combo details from cache for tenant: %s", tenant)
+            return cached_details
+        
+    xq_tokens = [t.strip() for t in config.get("xq_tokens", []) if t.strip()]
+    if not xq_tokens:
+        xq_tokens = DEFAULT_XQ_TOKENS
+        
+    details = []
+    
+    def fetch_single(name: str, symbol: str):
+        url = f"https://xueqiu.com/cubes/show.json?symbol={symbol}"
+        for retry in range(3):
+            token = xq_tokens[retry % len(xq_tokens)]
+            ua = random.choice(USER_AGENT_POOL)
+            cookie_header = token if ("xq_a_token=" in token or ";" in token) else f"xq_a_token={token};"
+            headers = {
+                "User-Agent": ua,
+                "Cookie": cookie_header,
+                "Accept": "application/json; text/plain, */*",
+                "Referer": f"https://xueqiu.com/P/{symbol}",
+            }
+            try:
+                r = requests.get(url, headers=headers, verify=False, timeout=8)
+                if r.status_code == 200:
+                    data = r.json()
+                    
+                    # Extract holdings
+                    view_rb = data.get("view_rebalancing")
+                    holdings_list = []
+                    
+                    if view_rb is not None:
+                        raw_holdings = view_rb.get("holdings", []) or []
+                        for h in raw_holdings:
+                            holdings_list.append({
+                                "stock_name": h.get("stock_name", ""),
+                                "stock_symbol": h.get("stock_symbol", ""),
+                                "weight": h.get("weight", 0.0)
+                            })
+                    else:
+                        # Fallback to current.json endpoint for holdings
+                        fallback_url = f"https://xueqiu.com/cubes/rebalancing/current.json?cube_symbol={symbol}"
+                        try:
+                            fallback_r = requests.get(fallback_url, headers=headers, verify=False, timeout=8)
+                            if fallback_r.status_code == 200:
+                                fallback_data = fallback_r.json()
+                                last_success = fallback_data.get("last_success_rb", {})
+                                raw_holdings = last_success.get("holdings", []) or []
+                                for h in raw_holdings:
+                                    holdings_list.append({
+                                        "stock_name": h.get("stock_name", ""),
+                                        "stock_symbol": h.get("stock_symbol", ""),
+                                        "weight": h.get("weight", 0.0)
+                                    })
+                            else:
+                                return {
+                                    "name": name,
+                                    "symbol": symbol,
+                                    "net_value": None,
+                                    "total_gain": None,
+                                    "daily_gain": None,
+                                    "monthly_gain": None,
+                                    "error": f"获取持仓失败 (API返回状态码: {fallback_r.status_code})"
+                                }
+                        except Exception as e:
+                            logger.error("Fallback error fetching current.json for %s: %s", symbol, e)
+                            return {
+                                "name": name,
+                                "symbol": symbol,
+                                "net_value": None,
+                                "total_gain": None,
+                                "daily_gain": None,
+                                "monthly_gain": None,
+                                "error": f"获取持仓失败 (网络或解析异常: {e})"
+                            }
+                        
+                    # Extract quote details with a fallback to nav_daily/all.json if they are None
+                    net_val = data.get("net_value")
+                    total_g = data.get("total_gain")
+                    daily_g = data.get("daily_gain")
+                    monthly_g = data.get("monthly_gain")
+                    
+                    if net_val is None or total_g is None or daily_g is None or monthly_g is None:
+                        nav_url = f"https://xueqiu.com/cubes/nav_daily/all.json?cube_symbol={symbol}"
+                        try:
+                            nav_r = requests.get(nav_url, headers=headers, verify=False, timeout=8)
+                            if nav_r.status_code == 200:
+                                nav_data = nav_r.json()
+                                portfolio_item = None
+                                for item in nav_data:
+                                    if isinstance(item, dict) and item.get("symbol") == symbol:
+                                        portfolio_item = item
+                                        break
+                                
+                                if portfolio_item:
+                                    points = portfolio_item.get("list", []) or []
+                                    if len(points) >= 1:
+                                        latest = points[-1]
+                                        if net_val is None:
+                                            net_val = latest.get("value")
+                                        if total_g is None:
+                                            total_g = latest.get("percent")
+                                        if daily_g is None and len(points) >= 2:
+                                            prev = points[-2]
+                                            if latest.get("value") and prev.get("value"):
+                                                daily_g = (latest["value"] - prev["value"]) / prev["value"] * 100
+                                        if monthly_g is None:
+                                            latest_time = latest.get("time")
+                                            if latest_time:
+                                                target_time = latest_time - 30 * 86400 * 1000
+                                                closest_point = None
+                                                min_diff = float('inf')
+                                                for p in points:
+                                                    p_time = p.get("time")
+                                                    if p_time:
+                                                        diff = abs(p_time - target_time)
+                                                        if diff < min_diff:
+                                                            min_diff = diff
+                                                            closest_point = p
+                                                if closest_point and closest_point.get("value") and latest.get("value"):
+                                                    if closest_point != latest:
+                                                        monthly_g = (latest["value"] - closest_point["value"]) / closest_point["value"] * 100
+                        except Exception as nav_e:
+                            logger.error("Fallback error fetching nav_daily for %s: %s", symbol, nav_e)
+                            
+                    return {
+                        "name": name,
+                        "symbol": symbol,
+                        "net_value": net_val,
+                        "total_gain": total_g,
+                        "daily_gain": daily_g,
+                        "monthly_gain": monthly_g,
+                        "holdings": holdings_list
+                    }
+                elif r.status_code == 429:
+                    continue
+            except Exception as e:
+                logger.error("Error fetching detail for %s: %s", symbol, e)
+        return {
+            "name": name,
+            "symbol": symbol,
+            "error": "Failed to fetch data from Xueqiu"
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(combos), 5)) as executor:
+        futures = {executor.submit(fetch_single, name, symbol): (name, symbol) for name, symbol in combos.items()}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                res = future.result()
+                details.append(res)
+            except Exception as e:
+                name, symbol = futures[future]
+                logger.error("Failed to fetch concurrent details for %s: %s", symbol, e)
+                details.append({
+                    "name": name,
+                    "symbol": symbol,
+                    "error": f"Failed to fetch concurrently: {e}"
+                })
+            
+    details.sort(key=lambda x: x.get("name", ""))
+    XUEQIU_COMBOS_CACHE[tenant] = (mtime, current_time, details)
+    return details
+
+
+@app.get(
+    "/settings/xueqiu/qrcode",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_xueqiu_qrcode(request: Request):
+    """Generate a unique QR code session for simulated Xueqiu OAuth-style login."""
+    import uuid
+    import time
+    
+    qrcode_id = str(uuid.uuid4())
+    XUEQIU_QR_SESSIONS[qrcode_id] = {
+        "status": "waiting",
+        "token": None,
+        "created_at": time.time()
+    }
+    
+    base_url = str(request.base_url)
+    if not base_url.endswith("/"):
+        base_url += "/"
+    auth_url = f"{base_url}xueqiu/auth?id={qrcode_id}"
+    
+    return {
+        "qrcode_id": qrcode_id,
+        "auth_url": auth_url
+    }
+
+
+@app.get(
+    "/settings/xueqiu/qrcode/status",
+    dependencies=[Depends(require_local_or_auth)],
+)
+async def get_xueqiu_qrcode_status(id: str):
+    """Poll QR code status and automatically inject token upon success."""
+    session = XUEQIU_QR_SESSIONS.get(id)
+    if not session:
+        return {"status": "expired"}
+        
+    status = session["status"]
+    if status == "confirmed" and session.get("token"):
+        token = session["token"]
+        
+        from src.config.paths import get_data_dir
+        data_dir = get_data_dir()
+        path = data_dir / "xueqiu_monitor.json"
+        
+        data = {"enabled": False, "feishu_webhook": "", "combos": {}, "xq_tokens": []}
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+                
+        tokens = data.get("xq_tokens", [])
+        if token not in tokens:
+            tokens.append(token)
+            data["xq_tokens"] = tokens
+            try:
+                path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as e:
+                logger.error("Failed to auto-save token from QR code: %s", e)
+                
+        XUEQIU_QR_SESSIONS.pop(id, None)
+        return {"status": "confirmed", "token": token}
+        
+    return {"status": status}
+
+
+@app.post(
+    "/settings/xueqiu/qrcode/confirm",
+)
+async def confirm_xueqiu_qrcode(payload: ConfirmQRCodeRequest):
+    """Simulate user scans QR code and confirms login, sending token."""
+    qrcode_id = payload.qrcode_id
+    token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token cannot be empty")
+        
+    session = XUEQIU_QR_SESSIONS.get(qrcode_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="QR code session not found or expired")
+        
+    session["status"] = "confirmed"
+    session["token"] = token
+    return {"status": "success"}
+
+
+@app.post(
+    "/settings/xueqiu/qrcode/scan",
+)
+async def scan_xueqiu_qrcode(id: str = Query(...)):
+    """Simulate scan event (status becomes 'scanned')."""
+    session = XUEQIU_QR_SESSIONS.get(id)
+    if not session:
+        raise HTTPException(status_code=404, detail="QR code session not found or expired")
+        
+    session["status"] = "scanned"
+    return {"status": "success"}
+
 
 
 @app.get("/correlation")
@@ -3260,7 +4534,7 @@ async def get_shadow_report(shadow_id: str, format: str = "html"):
     if format not in ("html", "pdf"):
         raise HTTPException(status_code=400, detail="format must be html or pdf")
 
-    reports_dir = Path.home() / ".vibe-trading" / "shadow_reports"
+    reports_dir = Path.home() / ".vibe-trading-cnx" / "shadow_reports"
     path = reports_dir / f"{shadow_id}.{format}"
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Shadow report not found: {shadow_id}.{format}")
@@ -4467,11 +5741,9 @@ async def delete_scheduled_run(job_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"scheduled run {job_id} not found")
 
 
-
 # ============================================================================
 # Main Entry Point
 # ============================================================================
-
 
 def serve_main(argv: list[str] | None = None) -> int:
     """Start the API server from CLI-style arguments."""

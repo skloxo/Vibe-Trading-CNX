@@ -47,7 +47,7 @@ def get_tenant_env_values(tenant: str) -> dict[str, str]:
     if tenant == "default":
         return {}
     # Use standard tenant path structure derived from home
-    tenant_dir = Path.home() / ".vibe-trading" / "tenants" / tenant
+    tenant_dir = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant
     env_path = tenant_dir / ".env"
     if not env_path.exists():
         return {}
@@ -184,15 +184,15 @@ def get_runtime_root(config_path: Path | None = None) -> Path:
 
     Returns:
         The directory containing the explicit structured config file when one
-        is provided, otherwise the default ``~/.vibe-trading`` runtime root,
-        or a tenant-specific root under ``~/.vibe-trading/tenants/<tenant>``.
+        is provided, otherwise the default ``~/.vibe-trading-cnx`` runtime root,
+        or a tenant-specific root under ``~/.vibe-trading-cnx/tenants/<tenant>``.
     """
     if config_path is not None:
         return config_path.expanduser().parent
     tenant = active_tenant_var.get()
     if tenant == "default":
-        return Path.home() / ".vibe-trading"
-    return Path.home() / ".vibe-trading" / "tenants" / tenant
+        return Path.home() / ".vibe-trading-cnx"
+    return Path.home() / ".vibe-trading-cnx" / "tenants" / tenant
 
 
 def get_config_candidates(config_path: Path | None = None) -> list[Path]:

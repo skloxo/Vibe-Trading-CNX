@@ -71,6 +71,9 @@ class AlphaMeta(BaseModel):
 
     id: str = Field(pattern=r"^[a-z][a-z0-9]+_[a-z0-9_]+$")
     nickname: str | None = None
+    nickname_zh: str | None = None
+    description_zh: str | None = None
+    usage_zh: str | None = None
     theme: list[Theme]
     formula_latex: str
     columns_required: list[PanelColumn]
@@ -113,6 +116,22 @@ def load_alpha_meta_from_py(path: Path) -> AlphaMeta:
         raise RegistryError(f"{path.name}: {size}B exceeds {_MAX_PY_BYTES}B cap")
 
     source = path.read_text(encoding="utf-8")
+
+    # Parse Chinese comments dynamically from the file headers
+    nickname_zh = None
+    description_zh = None
+    usage_zh = None
+    for raw_line in source.splitlines():
+        line = raw_line.strip()
+        if line.startswith("#"):
+            content = line[1:].strip()
+            if content.startswith("中文名称:"):
+                nickname_zh = content[len("中文名称:"):].strip()
+            elif content.startswith("简要说明:"):
+                description_zh = content[len("简要说明:"):].strip()
+            elif content.startswith("典型用途:"):
+                usage_zh = content[len("典型用途:"):].strip()
+
     tree = ast.parse(source, filename=str(path))
 
     meta_node: ast.expr | None = None
@@ -134,6 +153,12 @@ def load_alpha_meta_from_py(path: Path) -> AlphaMeta:
 
     if not isinstance(raw, dict):
         raise RegistryError(f"{path.name}: __alpha_meta__ must be dict, got {type(raw).__name__}")
+
+    # Inject the dynamically parsed Chinese fields into the dict
+    raw = dict(raw)
+    raw["nickname_zh"] = nickname_zh
+    raw["description_zh"] = description_zh
+    raw["usage_zh"] = usage_zh
 
     try:
         return AlphaMeta(**raw)

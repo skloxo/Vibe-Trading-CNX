@@ -11,7 +11,7 @@ from cli.onboard import PROVIDERS as ONBOARD_PROVIDERS
 
 EXPECTED_PROVIDER_DEFAULTS = {
     "openrouter": "deepseek/deepseek-v4-pro",
-    "openai": "gpt-5.5-instant",
+    "openai": "gpt-5.5",
     "deepseek": "deepseek-v4-pro",
     "gemini": "gemini-3.5-flash",
     "groq": "meta-llama/llama-4-maverick-17b-128e-instruct",
@@ -34,21 +34,35 @@ def test_llm_provider_registry_uses_current_default_models() -> None:
     for provider, model in EXPECTED_PROVIDER_DEFAULTS.items():
         assert defaults[provider] == model
 
+    assert defaults["openai"] != "gpt-5.5-instant"
 
-def test_cli_init_provider_choices_match_registry_defaults() -> None:
-    choice_defaults = {
+
+def test_interactive_onboard_openai_defaults_to_available_model() -> None:
+    provider = next(provider for provider in ONBOARD_PROVIDERS if provider.key == "openai")
+
+    assert provider.default_model == "gpt-5.5"
+    assert provider.suggested_models[0] == "gpt-5.5"
+    assert "gpt-5.5-pro" in provider.suggested_models
+    assert "gpt-5.5-instant" in provider.suggested_models
+    assert provider.default_model != "gpt-5.5-instant"
+
+
+def test_legacy_cli_provider_choices_match_registry_defaults() -> None:
+    legacy_defaults = {
         str(item["provider"]): item["model"]
         for item in cli._PROVIDER_CHOICES
         if item["provider"] in EXPECTED_PROVIDER_DEFAULTS
     }
 
-    for provider, model in choice_defaults.items():
+    for provider, model in legacy_defaults.items():
         assert model == EXPECTED_PROVIDER_DEFAULTS[provider]
+
+    assert legacy_defaults["openai"] == "gpt-5.5"
 
 
 def test_interactive_onboard_suggests_current_primary_models() -> None:
     onboard_defaults = {provider.key: provider.default_model for provider in ONBOARD_PROVIDERS}
 
     assert onboard_defaults["openrouter"] == "deepseek/deepseek-v4-pro"
-    assert onboard_defaults["openai"] == "gpt-5.5-instant"
+    assert onboard_defaults["openai"] == "gpt-5.5"
     assert onboard_defaults["deepseek"] == "deepseek-v4-pro"

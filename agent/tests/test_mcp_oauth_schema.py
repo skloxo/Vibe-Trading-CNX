@@ -45,7 +45,7 @@ def test_oauth_config_round_trip_snake_and_camel() -> None:
             "type": "oauth",
             "scopes": ["trading.read"],
             "client_name": "Vibe-Trading",
-            "cache_dir": "~/.vibe-trading/live/robinhood/oauth",
+            "cache_dir": "~/.vibe-trading-cnx/live/robinhood/oauth",
             "callback_port": 8765,
             "client_id": "client-id",
             "client_secret": "client-secret",
@@ -57,7 +57,7 @@ def test_oauth_config_round_trip_snake_and_camel() -> None:
             "type": "oauth",
             "scopes": ["trading.read"],
             "clientName": "Vibe-Trading",
-            "cacheDir": "~/.vibe-trading/live/robinhood/oauth",
+            "cacheDir": "~/.vibe-trading-cnx/live/robinhood/oauth",
             "callbackPort": 8765,
             "clientId": "client-id",
             "clientSecret": "client-secret",
@@ -130,7 +130,7 @@ def test_ibkr_seed_is_official_readonly_oauth_probe() -> None:
     assert ibkr.url == "https://api.ibkr.com/v1/api/mcp"
     assert ibkr.auth is not None and ibkr.auth.type == "oauth"
     assert ibkr.auth.scopes == ["mcp.read"]
-    assert ibkr.auth.cache_dir == "~/.vibe-trading/live/ibkr/oauth"
+    assert ibkr.auth.cache_dir == "~/.vibe-trading-cnx/live/ibkr/oauth"
     assert ibkr.enabled_tools == ["*"]
     assert "ibkr" in LIVE_BROKER_SERVER_KEYS
 

@@ -1,7 +1,7 @@
 """共用工具函数 — 名称获取/格式化/代码校验/市场判断
 
 最细粒度模块，所有Tool复用。
-名称查询通过 ~/.vibe-trading/cache/stock_names.json 磁盘缓存（7天有效期），
+名称查询通过 ~/.vibe-trading-cnx/cache/stock_names.json 磁盘缓存（7天有效期），
 首次需手动运行 scripts/build_stock_name_cache.py 建缓存。
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Optional
 # 内部缓存（模块级单例）
 # ============================================================
 _name_map: Optional[dict[str, str]] = None  # code -> name
-_CACHE_PATH = os.path.expanduser('~/.vibe-trading/cache/stock_names.json')
+_CACHE_PATH = os.path.expanduser('~/.vibe-trading-cnx/cache/stock_names.json')
 
 
 def _ensure_name_map() -> dict[str, str]:

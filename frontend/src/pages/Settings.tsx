@@ -1,8 +1,8 @@
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowUpCircle, Database, KeyRound, Loader2, MessageSquare, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check } from "lucide-react";
+import { ArrowUpCircle, Database, KeyRound, Loader2, MessageSquare, RefreshCw, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, QrCode } from "lucide-react";
 import { toast } from "sonner";
-import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type UserProfile, type TenantKey, type SystemVersionInfo } from "@/lib/api";
+import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type WechatChannel, type UserProfile, type TenantKey, type SystemVersionInfo } from "@/lib/api";
 import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import { createPortal } from "react-dom";
 import { AuthBarrier } from "@/components/layout/AuthBarrier";interface LLMFormState {
@@ -61,6 +61,27 @@ export function Settings() {
   const [chanAllowAllUsers, setChanAllowAllUsers] = useState(false);
   const [feishuSaving, setFeishuSaving] = useState(false);
   
+  // WeChat platforms settings states
+  const [wechatChannels, setWechatChannels] = useState<WechatChannel[]>([]);
+  const [isWechatModalOpen, setIsWechatModalOpen] = useState(false);
+  const [editingWechatChannel, setEditingWechatChannel] = useState<WechatChannel | null>(null);
+  const [wechatChannelToDelete, setWechatChannelToDelete] = useState<string | null>(null);
+
+  // Form states for WeChat modal
+  const [wechatChanName, setWechatChanName] = useState("");
+  const [wechatChanMode, setWechatChanMode] = useState("ilink"); // "ilink"
+  const [wechatChanEnabled, setWechatChanEnabled] = useState(true);
+  const [wechatIlinkBotToken, setWechatIlinkBotToken] = useState("");
+  const [wechatIlinkBaseUrl, setWechatIlinkBaseUrl] = useState("");
+  const [wechatSaving, setWechatSaving] = useState(false);
+  const [transientQrCode, setTransientQrCode] = useState<string | null>(null);
+  const [transientQrStatus, setTransientQrStatus] = useState<string>("idle");
+  const [retrievedBotId, setRetrievedBotId] = useState<string>("");
+  const [retrievedUserId, setRetrievedUserId] = useState<string>("");
+  const [showTransientScanner, setShowTransientScanner] = useState<boolean>(false);
+
+
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dataSaving, setDataSaving] = useState(false);
@@ -78,7 +99,7 @@ export function Settings() {
   const [isCopied, setIsCopied] = useState(false);
   const [llmMode, setLlmMode] = useState<"default" | "custom">("default");
   const [dataMode, setDataMode] = useState<"default" | "custom">("default");
-  const [activeSubTab, setActiveSubTab] = useState<"project" | "user">("project");
+  const [activeSubTab, setActiveSubTab] = useState<"project" | "user">("user");
   const [globalLLM, setGlobalLLM] = useState<LLMSettings | null>(null);
   const [globalData, setGlobalData] = useState<DataSourceSettings | null>(null);
   const [tenantLLM, setTenantLLM] = useState<LLMSettings | null>(null);
@@ -107,9 +128,10 @@ export function Settings() {
       api.getDataSourceSettings({ headers: { "X-Vibe-Scope": "global" } }),
       api.getFeatureFlags({ headers: { "X-Vibe-Scope": "global" } }),
       api.getFeishuChannels(),
-      api.getSettingsProfile()
+      api.getSettingsProfile(),
+      api.getWechatChannels()
     ])
-      .then(async ([llmData, dataSourceData, globalLlmData, globalDataSourceData, flagsData, feishuData, profileData]) => {
+      .then(async ([llmData, dataSourceData, globalLlmData, globalDataSourceData, flagsData, feishuData, profileData, wechatData]) => {
         if (!alive) return;
         setTenantLLM(llmData);
         setTenantData(dataSourceData);
@@ -118,24 +140,15 @@ export function Settings() {
         setFeatureFlags(flagsData);
         setFeishuChannels(feishuData);
         setProfile(profileData);
+        setWechatChannels(wechatData);
         setSettingsLoadError(null);
 
-        const currentTab = profileData.is_local ? "project" : "user";
-        setActiveSubTab(currentTab);
-
-        if (currentTab === "project") {
-          setSettings(globalLlmData);
-          setForm(toForm(globalLlmData));
-          setDataSettings(globalDataSourceData);
-          setLlmMode("default");
-          setDataMode("default");
-        } else {
-          setSettings(llmData);
-          setForm(toForm(llmData));
-          setDataSettings(dataSourceData);
-          setLlmMode(llmData.is_custom ? "custom" : "default");
-          setDataMode(dataSourceData.is_custom ? "custom" : "default");
-        }
+        setActiveSubTab("user");
+        setSettings(llmData);
+        setForm(toForm(llmData));
+        setDataSettings(dataSourceData);
+        setLlmMode(llmData.is_custom ? "custom" : "default");
+        setDataMode(dataSourceData.is_custom ? "custom" : "default");
 
         if (profileData.role === "admin" || profileData.is_local) {
           try {
@@ -454,6 +467,179 @@ export function Settings() {
       toast.error(i18n.t("settings.channelDeleteFailed", { message }) || "Failed to delete channel");
     }
   };
+
+  // WeChat handlers
+  const openWechatAddModal = () => {
+    setEditingWechatChannel(null);
+    setWechatChanName("");
+    setWechatChanMode("ilink");
+    setWechatChanEnabled(true);
+    setWechatIlinkBotToken("");
+    setWechatIlinkBaseUrl("");
+    
+    setRetrievedBotId("");
+    setRetrievedUserId("");
+    setTransientQrCode(null);
+    setTransientQrStatus("idle");
+    setShowTransientScanner(true);
+    
+    setIsWechatModalOpen(true);
+  };
+
+  const openWechatEditModal = (channel: WechatChannel) => {
+    setEditingWechatChannel(channel);
+    setWechatChanName(channel.name);
+    setWechatChanMode(channel.mode);
+    setWechatChanEnabled(channel.enabled);
+    setWechatIlinkBotToken(channel.ilink_bot_token || "");
+    setWechatIlinkBaseUrl(channel.ilink_base_url || "");
+    
+    setRetrievedBotId(channel.ilink_bot_id || "");
+    setRetrievedUserId(channel.ilink_user_id || "");
+    setTransientQrCode(null);
+    setTransientQrStatus("idle");
+    setShowTransientScanner(false);
+    
+    setIsWechatModalOpen(true);
+  };
+
+  const submitWechatChannel = async (event: FormEvent) => {
+    event.preventDefault();
+    setWechatSaving(true);
+    try {
+      if (editingWechatChannel) {
+        const updated = await api.updateWechatChannel(editingWechatChannel.id, {
+          name: wechatChanName.trim(),
+          mode: wechatChanMode,
+          ilink_bot_token: wechatIlinkBotToken.trim(),
+          ilink_base_url: wechatIlinkBaseUrl.trim(),
+          ilink_bot_id: retrievedBotId.trim(),
+          ilink_user_id: retrievedUserId.trim(),
+          enabled: wechatChanEnabled,
+        });
+        setWechatChannels(wechatChannels.map((c) => (c.id === updated.id ? updated : c)));
+        toast.success("微信通道设置已保存");
+      } else {
+        const created = await api.createWechatChannel({
+          name: wechatChanName.trim(),
+          mode: wechatChanMode,
+          ilink_bot_token: wechatIlinkBotToken.trim(),
+          ilink_base_url: wechatIlinkBaseUrl.trim(),
+          ilink_bot_id: retrievedBotId.trim(),
+          ilink_user_id: retrievedUserId.trim(),
+          enabled: wechatChanEnabled,
+        });
+        setWechatChannels([...wechatChannels, created]);
+        toast.success("微信通道已创建");
+      }
+      setIsWechatModalOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`保存通道失败: ${message}`);
+    } finally {
+      setWechatSaving(false);
+    }
+  };
+
+  const toggleWechatChannelEnabled = async (channel: WechatChannel) => {
+    try {
+      const updated = await api.updateWechatChannel(channel.id, {
+        name: channel.name,
+        mode: channel.mode,
+        ilink_bot_token: channel.ilink_bot_token,
+        enabled: !channel.enabled,
+      });
+      setWechatChannels(wechatChannels.map((c) => (c.id === updated.id ? updated : c)));
+      toast.success("微信通道已更新");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`更新通道状态失败: ${message}`);
+    }
+  };
+
+  const deleteWechatChannel = async (id: string) => {
+    setWechatChannelToDelete(id);
+  };
+
+
+
+  // Poll WeChat Transient QR code and login status
+  useEffect(() => {
+    if (!isWechatModalOpen || wechatChanMode !== "ilink" || !showTransientScanner) {
+      setTransientQrCode(null);
+      setTransientQrStatus("idle");
+      return;
+    }
+
+    let timeoutId: any = null;
+    let isMounted = true;
+
+    const fetchTransientQrAndPoll = async () => {
+      try {
+        setTransientQrStatus("waiting");
+        const data = await api.getWechatTransientQrcode("ilink");
+        if (!isMounted) return;
+
+        if (data.qrcode) {
+          setTransientQrCode(data.qrcode);
+        }
+
+        const pollStatus = async () => {
+          if (!isMounted || !data.temp_id) return;
+          try {
+            const statusData = await api.getWechatTransientStatus(data.temp_id);
+            if (!isMounted) return;
+
+            if (statusData.status) {
+              const status = statusData.status;
+              if (status === "success" || status === "login" || status === "logged_in") {
+                setTransientQrStatus("success");
+                if (statusData.bot_token) {
+                  setWechatIlinkBotToken(statusData.bot_token);
+                }
+                if (statusData.baseurl) {
+                  setWechatIlinkBaseUrl(statusData.baseurl);
+                }
+                if (statusData.ilink_bot_id) {
+                  setRetrievedBotId(statusData.ilink_bot_id);
+                }
+                if (statusData.ilink_user_id) {
+                  setRetrievedUserId(statusData.ilink_user_id);
+                }
+                toast.success("扫码绑定成功！");
+                setShowTransientScanner(false);
+                return;
+              } else if (status === "scanned") {
+                setTransientQrStatus("scanned");
+              } else if (status === "expired") {
+                setTransientQrStatus("expired");
+                return;
+              } else {
+                setTransientQrStatus("waiting");
+              }
+            }
+          } catch (err) {
+            console.error("Error polling transient WeChat status:", err);
+          }
+          timeoutId = setTimeout(pollStatus, 2000);
+        };
+
+        timeoutId = setTimeout(pollStatus, 2000);
+      } catch (err: any) {
+        console.error("Error initiating transient WeChat QR login:", err);
+        const errMsg = err.response?.data?.detail || "无法获取扫码登录二维码，请确保通道配置正确且网关正常启动";
+        toast.error(errMsg);
+        setTransientQrStatus("idle");
+      }
+    };
+
+    fetchTransientQrAndPoll();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isWechatModalOpen, wechatChanMode, showTransientScanner]);
 
   const handleRegisterTenant = async (e: FormEvent) => {
     e.preventDefault();
@@ -1211,6 +1397,100 @@ export function Settings() {
             )}
           </div>
 
+          {/* WeChat Channels Settings Card */}
+          <div className="rounded-lg border bg-card p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="space-y-1 pr-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <h2 className="text-base font-semibold">微信通道设置</h2>
+                </div>
+                <p className="text-xs text-muted-foreground">配置个人微信（iLink）消息推送通道</p>
+              </div>
+              <button
+                type="button"
+                onClick={openWechatAddModal}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-medium transition cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                添加通道
+              </button>
+            </div>
+
+            {wechatChannels.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground border border-dashed rounded-lg">
+                暂无微信配置通道，请点击上方“添加通道”
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {wechatChannels.map((channel) => (
+                  <div key={channel.id} className="flex flex-col py-3.5 first:pt-0 last:pb-0 gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{channel.name}</span>
+                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border ${
+                            channel.enabled
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}>
+                            {channel.enabled ? "Active" : "Disabled"}
+                          </span>
+                          <span className="inline-flex items-center rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium">
+                            官方微信机器人 (iLink)
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-mono">
+                          {channel.ilink_bot_id && <span>Bot ID: {channel.ilink_bot_id}</span>}
+                          {channel.ilink_user_id && (
+                            <>
+                              <span>•</span>
+                              <span>Admin: {channel.ilink_user_id}</span>
+                            </>
+                          )}
+                          <span>•</span>
+                          <span>Status: {channel.ilink_bot_token ? "已扫码登录" : "未授权"}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleWechatChannelEnabled(channel)}
+                          className={`rounded-md p-1.5 transition ${
+                            channel.enabled
+                              ? "text-green-500 hover:bg-green-500/10"
+                              : "text-muted-foreground hover:bg-muted"
+                          }`}
+                          title="启用/禁用"
+                        >
+                          <Power className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openWechatEditModal(channel)}
+                          className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-md p-1.5 transition"
+                          title="编辑通道"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteWechatChannel(channel.id)}
+                          className="text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-md p-1.5 transition"
+                          title="删除通道"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Tenant LLM Settings */}
           {/* Tenant LLM settings has a connection and generation settings form which is toggled by Custom vs Default */}
           <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] border bg-card/30 rounded-xl p-5 shadow-sm">
@@ -1879,6 +2159,205 @@ export function Settings() {
                 >
                   {feishuSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {feishuSaving ? i18n.t("settings.saving") : i18n.t("settings.save")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* WeChat Delete Confirm Modal */}
+      {wechatChannelToDelete && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold mb-2 text-foreground">确认删除通道</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              确定要删除该微信通道配置吗？此操作无法撤销。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setWechatChannelToDelete(null)}
+                className="rounded-lg px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted border border-border/50 transition cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const id = wechatChannelToDelete;
+                  setWechatChannelToDelete(null);
+                  const previousChannels = wechatChannels;
+                  setWechatChannels(wechatChannels.filter((c) => c.id !== id));
+                  try {
+                    await api.deleteWechatChannel(id);
+                    toast.success("微信通道已删除");
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : "Unknown error";
+                    toast.error(`删除通道失败: ${message}`);
+                    setWechatChannels(previousChannels);
+                  }
+                }}
+                className="rounded-lg px-4 py-2 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 transition cursor-pointer"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* WeChat Modal */}
+      {isWechatModalOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-xl border bg-card p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold mb-4 text-foreground">
+              {editingWechatChannel ? "编辑微信通道" : "添加微信通道"}
+            </h3>
+            <form onSubmit={submitWechatChannel} className="space-y-4">
+              <label className="grid gap-1.5">
+                <span className={labelClass}>{i18n.t("settings.channelName")}</span>
+                <input
+                  type="text"
+                  required
+                  value={wechatChanName}
+                  onChange={(e) => setWechatChanName(e.target.value)}
+                  className={fieldClass}
+                  placeholder="e.g. 个人微信通道"
+                />
+              </label>
+
+              {wechatChanMode === "ilink" && (
+                <div className="space-y-4">
+                  {showTransientScanner ? (
+                    <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-black/20 gap-3 max-w-sm mx-auto w-full animate-in fade-in duration-200">
+                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                        {transientQrStatus === "waiting" && "请使用手机微信扫描二维码登录"}
+                        {transientQrStatus === "scanned" && "已扫码，请在手机端确认登录"}
+                        {transientQrStatus === "success" && "🎉 登录成功！"}
+                        {transientQrStatus === "expired" && "二维码已过期，请重新获取"}
+                      </div>
+
+                      {transientQrCode ? (
+                        <div className="relative border p-2 bg-white rounded-lg">
+                          <img
+                            src={transientQrCode}
+                            alt="WeChat Login QR Code"
+                            className="h-40 w-40 object-contain"
+                          />
+                          {transientQrStatus === "expired" && (
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg flex-col gap-2">
+                              <span className="text-xs text-white">二维码已过期</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTransientQrCode(null);
+                                  setTransientQrStatus("idle");
+                                  setShowTransientScanner(false);
+                                  setTimeout(() => setShowTransientScanner(true), 50);
+                                }}
+                                className="rounded bg-primary px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
+                              >
+                                点击刷新
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="h-40 w-40 flex items-center justify-center border rounded-lg bg-muted/30">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                        <span className={`h-2 w-2 rounded-full ${
+                          transientQrStatus === "success" ? "bg-green-500" :
+                          transientQrStatus === "scanned" ? "bg-blue-500 animate-pulse" :
+                          "bg-yellow-500 animate-pulse"
+                        }`} />
+                        <span>
+                          {transientQrStatus === "success" ? "已连接" :
+                           transientQrStatus === "scanned" ? "已扫码，待确认" :
+                           "等待扫码..."}
+                        </span>
+                      </div>
+
+                      {editingWechatChannel && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTransientScanner(false)}
+                          className="text-xs text-primary hover:underline mt-1 cursor-pointer"
+                        >
+                          取消并返回
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-xs text-muted-foreground bg-black/10 border border-border/60 rounded-md p-3">
+                        <p className="font-semibold text-foreground mb-1">官方微信机器人 (iLink)</p>
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border/40">
+                          <div>
+                            <span className="block text-[10px] text-muted-foreground">Bot ID</span>
+                            <span className="font-mono text-xs text-foreground">{retrievedBotId || "未绑定"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] text-muted-foreground">User ID</span>
+                            <span className="font-mono text-xs text-foreground select-all break-all">{retrievedUserId || "未绑定"}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetrievedBotId("");
+                            setRetrievedUserId("");
+                            setWechatIlinkBotToken("");
+                            setShowTransientScanner(true);
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border bg-background hover:bg-accent hover:text-accent-foreground transition cursor-pointer"
+                        >
+                          <QrCode className="h-3.5 w-3.5" />
+                          重新扫码绑定
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="wechatChanEnabled"
+                  checked={wechatChanEnabled}
+                  onChange={(e) => setWechatChanEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary accent-primary cursor-pointer"
+                />
+                <label htmlFor="wechatChanEnabled" className="text-xs text-muted-foreground cursor-pointer select-none">
+                  启用通道
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsWechatModalOpen(false)}
+                  className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
+                >
+                  {i18n.t("agent.cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={wechatSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-70 transition cursor-pointer"
+                >
+                  {wechatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {wechatSaving ? i18n.t("settings.saving") : i18n.t("settings.save")}
                 </button>
               </div>
             </form>

@@ -161,6 +161,38 @@ export const api = {
     request<{ status: string }>(`/settings/platforms/feishu/channels/${id}`, {
       method: "DELETE",
     }),
+  getWechatChannels: () => request<WechatChannel[]>("/settings/platforms/wechat/channels"),
+  createWechatChannel: (channel: CreateWechatChannelRequest) =>
+    request<WechatChannel>("/settings/platforms/wechat/channels", {
+      method: "POST",
+      body: JSON.stringify(channel),
+    }),
+  updateWechatChannel: (id: string, channel: UpdateWechatChannelRequest) =>
+    request<WechatChannel>(`/settings/platforms/wechat/channels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(channel),
+    }),
+  deleteWechatChannel: (id: string) =>
+    request<{ status: string }>(`/settings/platforms/wechat/channels/${id}`, {
+      method: "DELETE",
+    }),
+  getWechatChannelQrcode: (id: string) =>
+    request<{ status: string; qrcode: string }>(`/settings/platforms/wechat/channels/${id}/qrcode`),
+  getWechatChannelStatus: (id: string) =>
+    request<{ status: string }>(`/settings/platforms/wechat/channels/${id}/status`),
+  getWechatTransientQrcode: (mode: string = "ilink") => {
+    const q = new URLSearchParams();
+    q.set("mode", mode);
+    return request<{ status: string; qrcode: string; temp_id: string }>(`/settings/platforms/wechat/transient/qrcode?${q.toString()}`);
+  },
+  getWechatTransientStatus: (tempId: string) =>
+    request<{
+      status: string;
+      bot_token?: string;
+      baseurl?: string;
+      ilink_bot_id?: string;
+      ilink_user_id?: string;
+    }>(`/settings/platforms/wechat/transient/status?temp_id=${tempId}`),
 
   // Alpha Zoo API
   listAlphas: (params: AlphaListParams = {}) => {
@@ -203,7 +235,7 @@ export const api = {
     }),
   // Read the persistent runtime status across all authorized brokers (SPEC §7.5).
   // Polled by the RunnerStatus panel; a plain authenticated GET, never a chat message.
-  getLiveStatus: () => request<LiveStatus>("/live/status"),
+  getLiveStatus: (signal?: AbortSignal) => request<LiveStatus>("/live/status", { signal }),
   authorizeLive: (broker: string) =>
     request<LiveAuthorizeResponse>("/live/authorize", {
       method: "POST",
@@ -221,6 +253,14 @@ export const api = {
       body: JSON.stringify({ broker }),
     }),
   getSettingsProfile: () => request<UserProfile>("/settings/profile"),
+  getMonitorStats: () => request<MonitorStats>("/admin/monitor/stats"),
+  getMonitorLogs: (params?: { limit?: number; level?: string; keyword?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.limit) q.set("limit", params.limit.toString());
+    if (params?.level) q.set("level", params.level);
+    if (params?.keyword) q.set("keyword", params.keyword);
+    return request<LogEntry[]>(`/admin/monitor/logs?${q.toString()}`);
+  },
   getTenantKeys: () => request<TenantKey[]>("/admin/tenants/keys"),
   createTenantKey: (body: { name: string }) =>
     request<TenantKey>("/admin/tenants/keys", {
@@ -241,6 +281,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getXueqiuSettings: (options?: RequestInit) => request<XueqiuSettings>("/settings/xueqiu", options),
+  updateXueqiuSettings: (settings: XueqiuSettings, options?: RequestInit) =>
+    request<XueqiuSettings>("/settings/xueqiu", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+      ...options,
+    }),
+  testXueqiuWebhook: (webhook_url: string) =>
+    request<{ status: string }>("/settings/xueqiu/test", {
+      method: "POST",
+      body: JSON.stringify({ webhook_url }),
+    }),
+  getXueqiuLogs: (options?: RequestInit) => request<XueqiuRebalancingLog[]>("/settings/xueqiu/logs", options),
+  getXueqiuCombosDetails: (options?: RequestInit) => request<XueqiuComboDetail[]>("/settings/xueqiu/combos/details", options),
+  getXueqiuQRCode: (options?: RequestInit) => request<{ qrcode_id: string; auth_url: string }>("/settings/xueqiu/qrcode", options),
+  getXueqiuQRCodeStatus: (id: string, options?: RequestInit) => request<{ status: string; token?: string }>(`/settings/xueqiu/qrcode/status?id=${id}`, options),
+  confirmXueqiuQRCode: (qrcode_id: string, token: string, options?: RequestInit) =>
+    request<{ status: string }>("/settings/xueqiu/qrcode/confirm", {
+      method: "POST",
+      body: JSON.stringify({ qrcode_id, token }),
+      ...options,
+    }),
+  scanXueqiuQRCode: (id: string, options?: RequestInit) =>
+    request<{ status: string }>(`/settings/xueqiu/qrcode/scan?id=${id}`, {
+      method: "POST",
+      ...options,
+    }),
 
   // Admin: System version & one-click upgrade
   getSystemVersion: () => request<SystemVersionInfo>("/admin/system/version"),
@@ -249,7 +316,6 @@ export const api = {
       method: "POST",
     }),
 };
-
 
 
 // --- Swarm types ---
@@ -340,6 +406,37 @@ export interface UpdateFeishuChannelRequest {
   allowed_users?: string;
   allow_all_users: boolean;
   enabled: boolean;
+}
+
+export interface WechatChannel {
+  id: string;
+  name: string;
+  mode: string; // "ilink"
+  enabled: boolean;
+  ilink_bot_token?: string;
+  ilink_base_url?: string;
+  ilink_bot_id?: string;
+  ilink_user_id?: string;
+}
+
+export interface CreateWechatChannelRequest {
+  name: string;
+  mode: string;
+  enabled: boolean;
+  ilink_bot_token?: string;
+  ilink_base_url?: string;
+  ilink_bot_id?: string;
+  ilink_user_id?: string;
+}
+
+export interface UpdateWechatChannelRequest {
+  name: string;
+  mode: string;
+  enabled: boolean;
+  ilink_bot_token?: string;
+  ilink_base_url?: string;
+  ilink_bot_id?: string;
+  ilink_user_id?: string;
 }
 
 export interface DataSourceSettings {
@@ -741,6 +838,9 @@ export interface AlphaSummary {
   theme: string[];
   universe: string[];
   nickname?: string;
+  nickname_zh?: string;
+  description_zh?: string;
+  usage_zh?: string;
   decay_horizon?: number | null;
   min_warmup_bars?: number | null;
   requires_sector?: boolean;
@@ -1028,6 +1128,64 @@ export interface TenantKey {
   name: string;
   created_at: string;
   is_active: boolean;
+}
+
+export interface XueqiuSettings {
+  enabled: boolean;
+  feishu_webhook: string;
+  combos: Record<string, string>;
+  xq_tokens: string[];
+  watch_uids: Record<string, string>;
+}
+
+export interface XueqiuRebalancingLog {
+  combo_name: string;
+  combo_id: string;
+  updated_at: number;
+  trade_time: string;
+  operation: string;
+  stock_symbol: string;
+  stock_name: string;
+  price: string | number;
+  current_weight: number;
+  prev_weight: number;
+  position_change: number;
+}
+
+export interface XueqiuComboHolding {
+  stock_name: string;
+  stock_symbol: string;
+  weight: number;
+}
+
+export interface XueqiuComboDetail {
+  name: string;
+  symbol: string;
+  net_value?: number;
+  total_gain?: number;
+  daily_gain?: number;
+  monthly_gain?: number;
+  holdings?: XueqiuComboHolding[];
+  error?: string;
+}
+
+export interface MonitorStats {
+  active_tenants: {
+    tenant_id: string;
+    name: string;
+    created_at: string;
+    is_active: boolean;
+  }[];
+  total_sessions: number;
+  total_runs: number;
+  memory_usage_mb: number;
+}
+
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  logger: string;
+  message: string;
 }
 
 export interface SystemVersionInfo {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -43,6 +44,10 @@ LIVE_BROKER_READONLY_WILDCARD_ALLOWED_EXTRA_SCOPES: dict[str, frozenset[str]] = 
 LIVE_BROKER_WRITE_SCOPES: dict[str, frozenset[str]] = {
     "ibkr": frozenset({"mcp.write"}),
 }
+ROBINHOOD_AGENT_CONFIG_PATH = "~/.vibe-trading/agent.json"
+LIVE_BROKER_WILDCARD_ALLOWLIST_ERROR = (
+    "enabledTools allowlist ('*'); pin an explicit read-only tool list"
+)
 
 
 def _url_host(url: str) -> str:
@@ -173,7 +178,7 @@ def _allows_readonly_wildcard_probe(
     allowed = set(required | allowed_extras)
     return required.issubset(scopes) and scopes.isdisjoint(write_scopes) and scopes <= allowed
 
-# Canonical seed for the operator-side ``~/.vibe-trading/agent.json`` mcpServers
+# Canonical seed for the operator-side ``~/.vibe-trading-cnx/agent.json`` mcpServers
 # entry that wires the Robinhood Agentic Trading channel. It ships OFF-by-default
 # read-only: an explicit READ allowlist (never ``["*"]``), OAuth auth, and the
 # streamableHttp transport. Operators copy this block into their protected config
@@ -192,8 +197,8 @@ ROBINHOOD_MCP_SERVER_SEED: dict[str, object] = {
     "auth": {
         "type": "oauth",
         "scopes": ["trading.read"],
-        "client_name": "Vibe-Trading",
-        "cache_dir": "~/.vibe-trading/live/robinhood/oauth",
+        "client_name": "Vibe-Trading-CNX",
+        "cache_dir": "~/.vibe-trading-cnx/live/robinhood/oauth",
     },
     # Seed the OFF-by-default READ allowlist to EXACTLY the canonical curated
     # READ tool names (``src.trading.connectors.robinhood.classification.ROBINHOOD_TOOL_CLASS``).
@@ -223,8 +228,8 @@ IBKR_MCP_SERVER_SEED: dict[str, object] = {
     "auth": {
         "type": "oauth",
         "scopes": ["mcp.read"],
-        "client_name": "Vibe-Trading",
-        "cache_dir": "~/.vibe-trading/live/ibkr/oauth",
+        "client_name": "Vibe-Trading-CNX",
+        "cache_dir": "~/.vibe-trading-cnx/live/ibkr/oauth",
     },
     "enabled_tools": ["*"],
 }
@@ -241,6 +246,54 @@ def _to_camel(name: str) -> str:
     """
     parts = name.split("_")
     return parts[0] + "".join(part.capitalize() for part in parts[1:])
+
+
+def _to_wire_config_value(value: object) -> object:
+    """Convert internal snake_case seed keys to external config aliases."""
+    if isinstance(value, dict):
+        return {_to_camel(str(key)): _to_wire_config_value(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_to_wire_config_value(child) for child in value]
+    return value
+
+
+def robinhood_readonly_enabled_tools() -> tuple[str, ...]:
+    """Return the canonical Robinhood read-only tool allowlist."""
+    enabled_tools = ROBINHOOD_MCP_SERVER_SEED["enabled_tools"]
+    if not isinstance(enabled_tools, list):
+        return ()
+    return tuple(str(tool) for tool in enabled_tools)
+
+
+def robinhood_mcp_server_seed_config() -> dict[str, object]:
+    """Return the copy-pasteable Robinhood ``mcpServers`` config seed."""
+    return {
+        "mcpServers": {
+            "robinhood": _to_wire_config_value(ROBINHOOD_MCP_SERVER_SEED),
+        }
+    }
+
+
+def format_robinhood_mcp_server_seed_json() -> str:
+    """Format the canonical Robinhood read-only ``mcpServers`` seed as JSON."""
+    return json.dumps(robinhood_mcp_server_seed_config(), indent=2)
+
+
+def format_robinhood_mcp_config_guidance(*, reason: str = "missing") -> str:
+    """Build operator-facing guidance for enabling Robinhood MCP safely."""
+    tools = ", ".join(robinhood_readonly_enabled_tools())
+    if reason == "wildcard":
+        lead = (
+            'Robinhood MCP config uses enabledTools: ["*"], which is not allowed for '
+            "live brokers."
+        )
+    else:
+        lead = "Robinhood MCP server is missing from mcpServers."
+    return (
+        f"{lead} Add the safe read-only Robinhood seed to {ROBINHOOD_AGENT_CONFIG_PATH} "
+        f"with explicit enabledTools: {tools}.\n"
+        f"{format_robinhood_mcp_server_seed_json()}"
+    )
 
 
 class ConfigBase(BaseModel):
@@ -283,8 +336,8 @@ class MCPOAuthConfig(ConfigBase):
 
     type: Literal["oauth"] = "oauth"
     scopes: list[str] = Field(default_factory=list)
-    client_name: str = "Vibe-Trading"
-    cache_dir: str = "~/.vibe-trading/live/robinhood/oauth"
+    client_name: str = "Vibe-Trading-CNX"
+    cache_dir: str = "~/.vibe-trading-cnx/live/robinhood/oauth"
     callback_port: int | None = Field(default=None, ge=1, le=65535)
     client_id: str | None = None
     client_secret: str | None = None
@@ -399,9 +452,16 @@ class AgentConfig(ConfigBase):
             if is_live_broker_entry(server_key, server) and "*" in server.enabled_tools:
                 if _allows_readonly_wildcard_probe(server_key, server):
                     continue
+                broker = live_broker_key_for_entry(server_key, server)
+                if broker == "robinhood":
+                    detail = (
+                        f"{LIVE_BROKER_WILDCARD_ALLOWLIST_ERROR}. "
+                        f"{format_robinhood_mcp_config_guidance(reason='wildcard')}"
+                    )
+                else:
+                    detail = LIVE_BROKER_WILDCARD_ALLOWLIST_ERROR
                 raise ValueError(
-                    f"Live-broker MCP server '{server_key}' may not use a wildcard "
-                    "enabledTools allowlist ('*'); pin an explicit read-only tool list"
+                    f"Live-broker MCP server '{server_key}' may not use a wildcard {detail}"
                 )
         return self
 

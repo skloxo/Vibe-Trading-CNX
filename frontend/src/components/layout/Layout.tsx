@@ -11,20 +11,11 @@ import { AuthBarrier } from "@/components/layout/AuthBarrier";
 import { setApiAuthKey } from "@/lib/apiAuth";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.10-s1";
+const APP_VERSION = "v0.1.10.cnx.1.1";
 
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
 
-  const NAV = [
-    { to: "/", icon: BarChart3, label: t('layout.home') },
-    { to: "/agent", icon: Bot, label: t('layout.agent') },
-    { to: "/runtime", icon: Activity, label: t('layout.runtime') },
-    { to: "/reports", icon: FileText, label: t('layout.reports') },
-    { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
-    { to: "/settings", icon: Settings, label: t('layout.settings') },
-    { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
-  ];
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const { dark, toggle } = useDarkMode();
@@ -40,7 +31,19 @@ export function Layout() {
 
   const [profileLoading, setProfileLoading] = useState(true);
   const [authFailed, setAuthFailed] = useState(false);
-  const [, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  const NAV = [
+    { to: "/", icon: BarChart3, label: t('layout.home') },
+    { to: "/agent", icon: Bot, label: t('layout.agent') },
+    { to: "/runtime", icon: Activity, label: t('layout.runtime') },
+    { to: "/reports", icon: FileText, label: t('layout.reports') },
+    { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
+    { to: "/xueqiu", icon: Activity, label: i18nHook.language === "zh-CN" ? "雪球监控" : "Xueqiu Watcher" },
+    ...(profile?.is_local ? [{ to: "/monitor", icon: Activity, label: i18nHook.language === "zh-CN" ? "服务看板" : "Monitor" }] : []),
+    { to: "/settings", icon: Settings, label: t('layout.settings') },
+    { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
+  ];
 
   useEffect(() => {
     let alive = true;
@@ -151,8 +154,8 @@ export function Layout() {
         {/* Brand */}
         <div className={cn("border-b", collapsed ? "p-2 flex justify-center" : "p-4")}>
           <Link to="/" className={cn("flex items-center font-bold text-base tracking-tight", collapsed ? "justify-center" : "gap-2")}>
-            <BarChart3 className="h-5 w-5 text-primary shrink-0" />
-            {!collapsed && "Vibe-Trading"}
+            <img src="/logo.png" className="h-5 w-5 rounded-md object-contain shrink-0" alt="Logo" />
+            {!collapsed && "Vibe-Trading-CNX"}
           </Link>
         </div>
 

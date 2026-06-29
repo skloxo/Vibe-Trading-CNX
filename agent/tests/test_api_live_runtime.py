@@ -23,9 +23,9 @@ import api_server
 
 
 def _client(tmp_path: Path, monkeypatch) -> TestClient:
-    # Redirect the runtime root (``~/.vibe-trading``) at the home boundary so the
+    # Redirect the runtime root (``~/.vibe-trading-cnx``) at the home boundary so the
     # live tree, HALT sentinel, mandate store, and proposal store all resolve
-    # under tmp_path. get_runtime_root() == Path.home() / ".vibe-trading".
+    # under tmp_path. get_runtime_root() == Path.home() / ".vibe-trading-cnx".
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path), raising=False)
     monkeypatch.setattr(api_server, "_runner_tasks", {}, raising=False)
     monkeypatch.setattr(api_server, "_runner_factory", None, raising=False)
@@ -251,7 +251,7 @@ def _seed_proposal(tmp_path: Path, proposal_id: str, broker: str = "robinhood") 
         "session_id": "s1",
         "profiles": [{"ordinal": 1, "label": "稳健", "max_order_usd": 250}],
     }
-    proposals_dir = tmp_path / ".vibe-trading" / "live" / broker / "proposals"
+    proposals_dir = tmp_path / ".vibe-trading-cnx" / "live" / broker / "proposals"
     proposals_dir.mkdir(parents=True, exist_ok=True)
     (proposals_dir / f"{proposal_id}.json").write_text(
         json.dumps(proposal), encoding="utf-8"
@@ -381,7 +381,7 @@ def test_runner_start_returns_503_when_broker_unavailable(tmp_path, monkeypatch)
 
 
 def _seed_ledger(tmp_path: Path, record: dict) -> None:
-    ledger = tmp_path / ".vibe-trading" / "live" / "audit.jsonl"
+    ledger = tmp_path / ".vibe-trading-cnx" / "live" / "audit.jsonl"
     ledger.parent.mkdir(parents=True, exist_ok=True)
     with ledger.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")

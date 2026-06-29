@@ -30,7 +30,7 @@ _SCHEMA_VERSION = 1
 def _default_store_path() -> Path:
     """Return the default path for the scheduled-research store.
 
-    Roots job state under the user runtime dir (``~/.vibe-trading`` by
+    Roots job state under the user runtime dir (``~/.vibe-trading-cnx`` by
     default), never inside the repo working tree — the same root the live
     runtime, swarm config, and persistent memory resolve via
     :func:`src.config.paths.get_runtime_root`.

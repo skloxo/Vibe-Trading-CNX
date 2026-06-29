@@ -78,6 +78,144 @@ class PlatformManager:
                 )
                 return
 
+            elif cmd in ("/position", "position", "持仓", "当前持仓"):
+                logger.info("[PlatformManager] Position query received for %s (chat: %s)", incoming.platform, incoming.chat_id)
+                from src.config.paths import get_runtime_root
+                import sqlite3
+                
+                tenant_id = adapter.tenant_id if (adapter and hasattr(adapter, "tenant_id")) else self.tenant_id
+                db_path = get_runtime_root() / f"stocks_{tenant_id}.db"
+                
+                if not db_path.exists():
+                    await adapter.send_message(
+                        chat_id=incoming.chat_id,
+                        content="⚠️ **模拟账户尚未初始化。**\n\n请在 Web 端设置页面中配置或启动模拟盘，然后在一键跟单后即可查看您的虚拟持仓！"
+                    )
+                    return
+                    
+                try:
+                    with sqlite3.connect(str(db_path)) as conn:
+                        conn.row_factory = sqlite3.Row
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('PaperTradingAccount', 'PaperHoldings')")
+                        tables = {row['name'] for row in cursor.fetchall()}
+                        
+                        if 'PaperTradingAccount' not in tables or 'PaperHoldings' not in tables:
+                            await adapter.send_message(
+                                chat_id=incoming.chat_id,
+                                content="⚠️ **模拟账户尚未初始化。**\n\n请在 Web 端设置页面中配置或启动模拟盘，然后在一键跟单后即可查看您的虚拟持仓！"
+                            )
+                            return
+                            
+                        cursor.execute("SELECT cash, market_value FROM PaperTradingAccount WHERE tenant_id = ?", (tenant_id,))
+                        acc_row = cursor.fetchone()
+                        if not acc_row:
+                            await adapter.send_message(
+                                chat_id=incoming.chat_id,
+                                content="⚠️ **未找到该租户的模拟账户数据。**"
+                            )
+                            return
+                        
+                        cash = acc_row['cash']
+                        market_value = acc_row['market_value']
+                        total_value = cash + market_value
+                        
+                        cursor.execute("SELECT symbol, total_quantity, available_quantity, cost_price FROM PaperHoldings WHERE tenant_id = ? AND total_quantity > 0", (tenant_id,))
+                        holdings = cursor.fetchall()
+                        
+                        msg_lines = [
+                            f"📊 **Vibe-Trading 模拟账户持仓**",
+                            f"----------------------------------------",
+                            f"💵 **可用资金：** {cash:,.2f} 元",
+                            f"📈 **持仓市值：** {market_value:,.2f} 元",
+                            f"💰 **总资产：** {total_value:,.2f} 元",
+                            f"----------------------------------------",
+                            f"**持仓明细：**",
+                        ]
+                        
+                        if not holdings:
+                            msg_lines.append("📭 目前无持仓个股。")
+                        else:
+                            for h in holdings:
+                                msg_lines.append(
+                                    f"• **{h['symbol']}** | 持仓: {h['total_quantity']}股 (可售: {h['available_quantity']}股) | 成本价: {h['cost_price']:.2f}元"
+                                )
+                                
+                        await adapter.send_message(
+                            chat_id=incoming.chat_id,
+                            content="\n".join(msg_lines)
+                        )
+                except Exception as e:
+                    logger.error("[PlatformManager] Error querying position from database: %s", e)
+                    await adapter.send_message(
+                        chat_id=incoming.chat_id,
+                        content=f"❌ 查询持仓失败，数据库发生异常: {e}"
+                    )
+                return
+
+            elif cmd in ("/metrics", "metrics", "胜率", "战绩", "我的战绩"):
+                logger.info("[PlatformManager] Metrics query received for %s (chat: %s)", incoming.platform, incoming.chat_id)
+                from src.config.paths import get_runtime_root
+                import sqlite3
+                
+                tenant_id = adapter.tenant_id if (adapter and hasattr(adapter, "tenant_id")) else self.tenant_id
+                db_path = get_runtime_root() / f"stocks_{tenant_id}.db"
+                
+                if not db_path.exists():
+                    await adapter.send_message(
+                        chat_id=incoming.chat_id,
+                        content="⚠️ **模拟账户尚未初始化。**\n\n暂无战绩表现数据。"
+                    )
+                    return
+                    
+                try:
+                    with sqlite3.connect(str(db_path)) as conn:
+                        conn.row_factory = sqlite3.Row
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='PerformanceMetrics'")
+                        if not cursor.fetchone():
+                            await adapter.send_message(
+                                chat_id=incoming.chat_id,
+                                content="⚠️ **模拟账户尚未初始化。**\n\n暂无战绩表现数据。"
+                            )
+                            return
+                            
+                        cursor.execute("SELECT equity, realized_pnl, win_rate, max_drawdown FROM PerformanceMetrics WHERE tenant_id = ? ORDER BY timestamp DESC LIMIT 1", (tenant_id,))
+                        metrics_row = cursor.fetchone()
+                        if not metrics_row:
+                            await adapter.send_message(
+                                chat_id=incoming.chat_id,
+                                content="📈 **模拟盘已启动，目前暂无历史成交的战绩结余。**\n当有调仓买卖结清后，系统将自动汇总夏普比率、胜率与回撤！"
+                            )
+                            return
+                            
+                        win_rate = metrics_row['win_rate']
+                        max_drawdown = metrics_row['max_drawdown']
+                        pnl = metrics_row['realized_pnl']
+                        equity = metrics_row['equity']
+                        
+                        msg_lines = [
+                            f"🏆 **Vibe-Trading 模拟盘战绩报告**",
+                            f"----------------------------------------",
+                            f"💹 **账户净值：** {equity:,.2f} 元",
+                            f"💵 **平仓累计盈亏：** {pnl:+,.2f} 元",
+                            f"🎯 **累计交易胜率：** {win_rate:.2f}%",
+                            f"📉 **最大回撤 (MDD)：** {max_drawdown:.2f}%",
+                            f"----------------------------------------",
+                            f"📈 战绩由系统按日结算并归集。用数据支撑决策，以回测验证胜率。"
+                        ]
+                        await adapter.send_message(
+                            chat_id=incoming.chat_id,
+                            content="\n".join(msg_lines)
+                        )
+                except Exception as e:
+                    logger.error("[PlatformManager] Error querying metrics from database: %s", e)
+                    await adapter.send_message(
+                        chat_id=incoming.chat_id,
+                        content=f"❌ 查询战绩失败，数据库发生异常: {e}"
+                    )
+                return
+
             # 1. Resolve Session ID (or create one)
             session_id = await self._resolve_or_create_session(incoming)
 
@@ -202,13 +340,15 @@ class PlatformManager:
             return "\n".join(lines)
 
         try:
-            # Send initial progress card
+            # Send initial progress card (skip for iLink to preserve the single-use context token)
             title = "Vibe-Trading 量化分析智能体"
-            progress_msg_id = await adapter.send_message(
-                chat_id=chat_id,
-                content=build_progress_markdown(),
-                title=title,
-            )
+            is_ilink = (hasattr(adapter, "_mode") and getattr(adapter, "_mode") == "ilink")
+            if not is_ilink:
+                progress_msg_id = await adapter.send_message(
+                    chat_id=chat_id,
+                    content=build_progress_markdown(),
+                    title=title,
+                )
 
             # Subscribe to event stream
             event_bus = self.session_service.event_bus
@@ -223,36 +363,41 @@ class PlatformManager:
                 if event_type == "text_delta":
                     current_status = "✍️ 正在生成回答..."
                     current_text += data.get("delta", "")
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    if progress_msg_id:
+                        await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
 
                 elif event_type == "tool_call":
                     tool = data.get("tool", "")
                     args = json.dumps(data.get("arguments", {}), ensure_ascii=False)
                     current_status = f"🔧 正在调用量化工具: `{tool}`\n`参数: {args[:150]}`"
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    if progress_msg_id:
+                        await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
 
                 elif event_type == "tool_result":
                     tool = data.get("tool", "")
                     status = data.get("status", "")
                     preview = data.get("preview", "")
                     current_status = f"✅ 工具 `{tool}` 已返回 ({status})\n`预览: {preview[:150]}`"
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    if progress_msg_id:
+                        await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
 
                 elif event_type == "thinking_done":
                     # Extract snippet of thinking
                     content = data.get("content", "")
                     current_thinking = content[:150] + ("..." if len(content) > 150 else "")
                     current_status = "🧠 思考完毕，开始作答。"
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
+                    if progress_msg_id:
+                        await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(), title)
 
                 elif event_type == "attempt.completed":
                     # Mark card status as success
-                    if hasattr(adapter, "set_message_status"):
+                    if progress_msg_id and hasattr(adapter, "set_message_status"):
                         adapter.set_message_status(progress_msg_id, "success")
                     
                     current_status = "🎉 分析完成！"
                     current_thinking = ""
-                    await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
+                    if progress_msg_id:
+                        await adapter.update_message(chat_id, progress_msg_id, build_progress_markdown(show_preview=False), title)
                     
                     # Fetch final complete response content from store or attempt summary
                     summary = data.get("summary", "")

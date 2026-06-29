@@ -9,6 +9,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+#: Deterministic price-context feature names shared across the pipeline.
+#: The extractor computes these as-of ``buy_dt``, codegen flattens their
+#: ``{min,max}`` bounds into the template, and the scanner evaluates them in
+#: real time. Defining the names here — on the stable data-contract boundary —
+#: keeps the three modules from drifting apart.
+PRICE_FEATURES: tuple[str, ...] = ("entry_rsi14", "prior_5d_return")
+
 
 @dataclass(frozen=True)
 class ShadowRule:

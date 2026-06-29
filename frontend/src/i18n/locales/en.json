@@ -1,6 +1,11 @@
 {
   "app": {
-    "version": "v0.1.10"
+    "version": "v0.1.10.cnx.1.1"
+  },
+  "charts": {
+    "noPriceData": "No price data",
+    "noCorrelationData": "No correlation data",
+    "noEquityData": "No equity data"
   },
   "charts": {
     "noPriceData": "No price data",
@@ -117,7 +122,7 @@
     "disconnected": "Connection lost"
   },
   "welcome": {
-    "title": "Vibe-Trading",
+    "title": "Vibe-Trading-CNX",
     "subtitle": "vibe trading with your professional financial agent team",
     "describePrompt": "Describe a trading strategy to get started.",
     "tryExample": "Try an example:",

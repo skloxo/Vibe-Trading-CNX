@@ -28,7 +28,7 @@ from src.live.runtime.reconcile import (
 
 @pytest.fixture()
 def live_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point the live runtime root at an isolated tmp dir (no real ~/.vibe-trading)."""
+    """Point the live runtime root at an isolated tmp dir (no real ~/.vibe-trading-cnx)."""
     monkeypatch.setattr(paths, "get_runtime_root", lambda: tmp_path)
     return tmp_path
 

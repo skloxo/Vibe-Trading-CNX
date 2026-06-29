@@ -84,7 +84,7 @@ def _register_live_slash_commands() -> None:
 
 _register_live_slash_commands()
 
-_ENV_PATH = Path.home() / ".vibe-trading" / ".env"
+_ENV_PATH = Path.home() / ".vibe-trading-cnx" / ".env"
 # Best-effort fallbacks used only when the probe genuinely fails (missing
 # dependency, broken install). The numbers track the actual bundled counts
 # so a probe failure still shows a plausible banner rather than "0 loaded".
@@ -133,7 +133,7 @@ def _probe_skill_count() -> int:
 
     Reads ``SkillsLoader.skills`` directly — that is the authoritative list
     populated by :meth:`SkillsLoader._load` from bundled ``agent/skills/``
-    plus ``~/.vibe-trading/skills/user/``.
+    plus ``~/.vibe-trading-cnx/skills/user/``.
     """
     try:
         from src.agent.skills import SkillsLoader
@@ -146,7 +146,7 @@ def _probe_skill_count() -> int:
 
 def _probe_session_count() -> int:
     """Count recorded sessions from the SQLite store."""
-    db_path = Path.home() / ".vibe-trading" / "sessions.db"
+    db_path = Path.home() / ".vibe-trading-cnx" / "sessions.db"
     if not db_path.exists():
         return 0
     try:
@@ -364,7 +364,7 @@ def _new_session(prompt_preview: str) -> Optional[str]:
 
     Dual-writes to the filesystem :class:`SessionStore` (canonical JSONL
     log under ``agent/sessions/``) *and* to the SQLite FTS5 search index
-    (``~/.vibe-trading/sessions.db``) so cross-session search via
+    (``~/.vibe-trading-cnx/sessions.db``) so cross-session search via
     :class:`SessionSearchIndex` finds turns recorded from the interactive
     loop. Matches the pattern in :class:`SessionService`.
     """
@@ -1334,6 +1334,40 @@ def _build_typer_app():  # type: ignore[no-untyped-def]
     @app.command("init", help="Re-run the interactive setup wizard.")
     def _init() -> None:
         run_onboarding(console=get_console())
+
+    @app.command("setup", help="Install frontend deps and build the production bundle (cross-platform).")
+    def _setup(
+        frontend_dir: str = typer.Option(
+            "frontend",
+            "--frontend-dir",
+            help="Path to the frontend directory (relative to repo root or absolute).",
+        ),
+    ) -> None:
+        sys.exit(main(["setup", "--frontend-dir", frontend_dir]))
+
+    @app.command("dev", help="Start backend + Vite dev server in one process.")
+    def _dev(
+        port: int = typer.Option(8899, "--port", help="Backend port."),
+        frontend_port: int = typer.Option(
+            5899,
+            "--frontend-port",
+            help="Vite dev server port (must match vite.config.ts).",
+        ),
+        frontend_dir: str = typer.Option("frontend", "--frontend-dir"),
+    ) -> None:
+        sys.exit(
+            main(
+                [
+                    "dev",
+                    "--port",
+                    str(port),
+                    "--frontend-port",
+                    str(frontend_port),
+                    "--frontend-dir",
+                    frontend_dir,
+                ]
+            )
+        )
 
     return app
 

@@ -47,7 +47,7 @@ def live_root(tmp_path: Path):
 
     ``src.live.paths.live_root`` and ``broker_dir`` both resolve through
     ``get_runtime_root`` at call time, so patching it isolates halt + mandate
-    state for halt.py / store.py without touching the real ~/.vibe-trading.
+    state for halt.py / store.py without touching the real ~/.vibe-trading-cnx.
     """
     with patch.object(live_paths, "get_runtime_root", return_value=tmp_path):
         yield tmp_path

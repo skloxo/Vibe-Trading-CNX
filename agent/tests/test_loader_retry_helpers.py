@@ -240,7 +240,7 @@ def test_loader_cache_disabled_by_default_bypasses_home(tmp_path, monkeypatch):
 
     assert calls["count"] == 1
     pd.testing.assert_frame_equal(out, frame)
-    assert not (home / ".vibe-trading").exists()
+    assert not (home / ".vibe-trading-cnx").exists()
 
 
 def test_loader_cache_key_partitions_source_symbol_timeframe_date_and_fields():
@@ -291,7 +291,7 @@ def test_loader_cache_happy_path_writes_then_reuses(
     pd.testing.assert_frame_equal(first, frame)
     pd.testing.assert_frame_equal(second, frame)
     assert loader_cache_path(**kwargs).is_file()
-    assert str(loader_cache_path(**kwargs)).startswith(str(tmp_path / ".vibe-trading" / "cache"))
+    assert str(loader_cache_path(**kwargs)).startswith(str(tmp_path / ".vibe-trading-cnx" / "cache"))
 
 
 def test_loader_cache_corrupt_entry_falls_back_to_live_fetch(
@@ -413,7 +413,7 @@ def test_loader_cache_skips_unsettled_today_range(tmp_path, monkeypatch):
 
     assert loader_cache_get(**kwargs) is None
     assert not loader_cache_path(**kwargs).exists()
-    assert not (tmp_path / ".vibe-trading").exists()
+    assert not (tmp_path / ".vibe-trading-cnx").exists()
 
 
 def test_loader_cache_real_duckdb_round_trip(tmp_path, monkeypatch):

@@ -22,10 +22,16 @@
   <img src="https://img.shields.io/badge/Frontend-React%2019-61DAFB?style=flat&logo=react&logoColor=white" alt="React">
   <a href="https://pypi.org/project/vibe-trading-ai/"><img src="https://img.shields.io/pypi/v/vibe-trading-ai?style=flat&logo=pypi&logoColor=white" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat" alt="License"></a>
+  <a href="https://github.com/skloxo/Vibe-Trading/actions/workflows/test.yml"><img src="https://github.com/skloxo/Vibe-Trading/actions/workflows/test.yml/badge.svg" alt="CI Status"></a>
+  <a href="https://github.com/skloxo/Vibe-Trading/actions/workflows/docker-publish.yml"><img src="https://github.com/skloxo/Vibe-Trading/actions/workflows/docker-publish.yml/badge.svg" alt="Docker Build Status"></a>
   <br>
   <a href="https://github.com/HKUDS/.github/blob/main/profile/README.md"><img src="https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat-square&logo=feishu&logoColor=white" alt="Feishu"></a>
   <a href="https://github.com/HKUDS/.github/blob/main/profile/README.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat-square&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="https://discord.gg/6TdQnT5xcF"><img src="https://img.shields.io/badge/Discord-Join-7289DA?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
+</p>
+
+<p align="center">
+  <a href="https://codespaces.new/skloxo/Vibe-Trading"><img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces" style="max-width: 100%;"></a>
 </p>
 
 <p align="center">
@@ -162,11 +168,12 @@
   <tr>
     <td align="center" width="50%" valign="top">
       <img src="assets/feature-cross-market-data-backtesting.png" height="130" alt="Cross-market data and backtesting"/><br>
-      <h3>📊 跨市场数据与回测</h3>
+      <h3>📊 全球市场数据与回测</h3>
       <div align="left">
-        • A 股、港股、美股、加密、期货与外汇<br>
-        • 数据 fallback 与组合回测<br>
-        • PIT 数据、验证与 run cards
+        • <b>全球覆盖</b>：A 股、港股、美股、加密货币、期货与外汇<br>
+        • <b>券商完整</b>：10 个券商连接器（OKX, Binance, Alpaca, IBKR 等）全部可用并加固<br>
+        • 多层数据 fallback 与跨市场组合回测<br>
+        • PIT 数据、验证 artifacts 与 run cards
       </div>
     </td>
     <td align="center" width="50%" valign="top">
