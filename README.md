@@ -539,10 +539,10 @@ Vibe-Trading 是高度依赖工具的智能体：skills、backtests、memory 和
 ## 🖥 CLI Reference
 
 ```bash
-vibe-trading               # interactive TUI
-vibe-trading run -p "..."  # single run
-vibe-trading serve         # API server
-vibe-trading alpha list    # 浏览 452 个预置 alpha；支持 show / bench / compare / export-manifest 子命令
+vibe-trading-cnx               # interactive TUI
+vibe-trading-cnx run -p "..."  # single run
+vibe-trading-cnx serve         # API server
+vibe-trading-cnx alpha list    # 浏览 452 个预置 alpha；支持 show / bench / compare / export-manifest 子命令
 ```
 
 <details>
@@ -574,27 +574,27 @@ vibe-trading alpha list    # 浏览 452 个预置 alpha；支持 show / bench / 
 <summary><b>Single run 与 flags</b></summary>
 
 ```bash
-vibe-trading run -p "Backtest BTC-USDT MACD strategy, last 30 days"
-vibe-trading run -p "Analyze AAPL momentum" --json
-vibe-trading run -f strategy.txt
-echo "Backtest 000001.SZ RSI" | vibe-trading run
+vibe-trading-cnx run -p "回测宁德时代 (300750) 2024年的日线突破策略"
+vibe-trading-cnx run -p "分析腾讯控股 (00700.HK) 的动量因子" --json
+vibe-trading-cnx run -f strategy.txt
+echo "回测平安银行 (000001.SZ) RSI" | vibe-trading-cnx run
 ```
 
 ```bash
-vibe-trading -p "your prompt"
-vibe-trading --skills
-vibe-trading --swarm-presets
-vibe-trading --swarm-run investment_committee '{"topic":"BTC outlook"}'
-vibe-trading --list
-vibe-trading --show <run_id>
-vibe-trading --code <run_id>
-vibe-trading --pine <run_id>           # Export indicators (TradingView + TDX + MT5)
-vibe-trading --trace <run_id>
-vibe-trading --continue <run_id> "refine the strategy"
-vibe-trading --upload report.pdf
-vibe-trading alpha list --zoo gtja191 --limit 10
-vibe-trading alpha show gtja191_171
-vibe-trading alpha bench --zoo gtja191 --universe csi300 --period 2018-2025 --top 20
+vibe-trading-cnx -p "your prompt"
+vibe-trading-cnx --skills
+vibe-trading-cnx --swarm-presets
+vibe-trading-cnx --swarm-run investment_committee '{"topic":"A股与港股主力资金流向研判"}'
+vibe-trading-cnx --list
+vibe-trading-cnx --show <run_id>
+vibe-trading-cnx --code <run_id>
+vibe-trading-cnx --pine <run_id>           # Export indicators (TradingView + TDX + MT5)
+vibe-trading-cnx --trace <run_id>
+vibe-trading-cnx --continue <run_id> "精细化止盈止损策略"
+vibe-trading-cnx --upload report.pdf
+vibe-trading-cnx alpha list --zoo gtja191 --limit 10
+vibe-trading-cnx alpha show gtja191_171
+vibe-trading-cnx alpha bench --zoo gtja191 --universe csi300 --period 2020-2025 --top 20
 ```
 
 </details>
