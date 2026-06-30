@@ -2582,16 +2582,25 @@ async def get_system_version(request: Request):
     dependencies=[Depends(require_admin)],
 )
 async def trigger_system_update(request: Request):
-    """Trigger system update in the background via update.sh."""
+    """Trigger system update in the background via update.sh or a trigger file."""
     import subprocess
     import shutil
     import os
 
     if os.path.exists('/.dockerenv') or os.environ.get("VIBE_TRADING_TRUST_DOCKER_LOOPBACK") == "1":
-        raise HTTPException(
-            status_code=400,
-            detail="系统运行在 Docker 容器中，请在宿主机终端执行以下命令进行升级：\n\ncd /home/skloxo/aho/vibe-trading && git pull project main --tags && docker compose up -d --build"
-        )
+        trigger_file = AGENT_DIR / "runs" / ".trigger_upgrade"
+        try:
+            with open(trigger_file, "w") as f:
+                f.write("upgrade")
+            return {
+                "status": "success",
+                "message": "已成功在后台触发系统升级，请稍候约1分钟，服务正在自动拉取代码、重建容器并重启..."
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"写入升级信号文件失败: {str(e)}"
+            )
 
     update_script = AGENT_DIR.parent / "update.sh"
     if not update_script.exists():
