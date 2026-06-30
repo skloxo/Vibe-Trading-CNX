@@ -25,6 +25,16 @@ export function Layout() {
   const sseRetryAttempt = useAgentStore(s => s.sseRetryAttempt);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("qa-sidebar") === "collapsed");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const isCollapsed = collapsed && !isMobile;
 
   const activeSessionId = searchParams.get("session");
   const streamingSessionId = useAgentStore(s => s.streamingSessionId);
@@ -153,19 +163,19 @@ export function Layout() {
         "border-r bg-card flex flex-col shrink-0 transition-all duration-200 z-50",
         "max-md:fixed max-md:top-0 max-md:bottom-0 max-md:left-0 max-md:w-64 max-md:shadow-2xl",
         mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
-        collapsed ? "md:w-12" : "md:w-64"
+        isCollapsed ? "md:w-12" : "md:w-64"
       )}>
 
         {/* Brand */}
-        <div className={cn("border-b", collapsed ? "p-2 flex justify-center" : "p-4")}>
-          <Link to="/" className={cn("flex items-center font-bold text-base tracking-tight", collapsed ? "justify-center" : "gap-2")}>
+        <div className={cn("border-b", isCollapsed ? "p-2 flex justify-center" : "p-4")}>
+          <Link to="/" className={cn("flex items-center font-bold text-base tracking-tight", isCollapsed ? "justify-center" : "gap-2")}>
             <img src="/logo.png" className="h-5 w-5 rounded-md object-contain shrink-0" alt="Logo" />
-            {!collapsed && "Vibe-Trading-CNX"}
+            {!isCollapsed && "Vibe-Trading-CNX"}
           </Link>
         </div>
 
         {/* Nav */}
-        <nav className={cn("space-y-0.5", collapsed ? "p-1" : "p-2")}>
+        <nav className={cn("space-y-0.5", isCollapsed ? "p-1" : "p-2")}>
           {NAV.map(({ to, icon: Icon, label }) => {
             const text = label;
             return (
@@ -174,22 +184,22 @@ export function Layout() {
                 to={to}
                 className={cn(
                   "flex items-center rounded-md text-sm transition-colors",
-                  collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+                  isCollapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
                   (to === "/" ? pathname === "/" : pathname.startsWith(to))
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
-                title={collapsed ? text : undefined}
+                title={isCollapsed ? text : undefined}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {!collapsed && text}
+                {!isCollapsed && text}
               </Link>
             );
           })}
         </nav>
 
         {/* Sessions — hidden when collapsed */}
-        {!collapsed && (
+        {!isCollapsed && (
           <div className="flex-1 overflow-auto border-t mt-2 flex flex-col">
             <div className="flex items-center justify-between px-4 py-2">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -285,11 +295,11 @@ export function Layout() {
         )}
 
         {/* Spacer when collapsed */}
-        {collapsed && <div className="flex-1" />}
+        {isCollapsed && <div className="flex-1" />}
 
         {/* Footer */}
-        <div className={cn("border-t", collapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2")}>
-          {collapsed ? (
+        <div className={cn("border-t", isCollapsed ? "p-1 flex flex-col items-center gap-1" : "p-3 space-y-2")}>
+          {isCollapsed ? (
             <>
               <button onClick={toggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors" title={dark ? t('layout.light') : t('layout.dark')}>
                 {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -311,7 +321,7 @@ export function Layout() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setCollapsed(true)}
-                    className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                    className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors md:block hidden"
                     title={t('layout.collapse')}
                   >
                     <ChevronsLeft className="h-3.5 w-3.5" />

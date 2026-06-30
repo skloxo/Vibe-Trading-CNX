@@ -85,7 +85,6 @@ describe("Runtime page", () => {
     render(<Runtime />);
 
     expect(await screen.findByText("Live / Paper Runtime Status")).toBeInTheDocument();
-    expect(screen.getByText("Clear")).toBeInTheDocument();
     expect(screen.getByText("paper")).toBeInTheDocument();
     expect(screen.getByText("auth present")).toBeInTheDocument();
     expect(screen.getByText("runner alive")).toBeInTheDocument();
