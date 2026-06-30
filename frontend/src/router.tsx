@@ -34,6 +34,9 @@ const AlphaZoo = lazy(() =>
 const Monitor = lazy(() =>
   import("@/pages/Monitor").then((m) => ({ default: m.Monitor })),
 );
+const Logs = lazy(() =>
+  import("@/pages/Logs").then((m) => ({ default: m.Logs })),
+);
 
 function PageLoader() {
   return (
@@ -62,6 +65,7 @@ export const router = createBrowserRouter([
       { path: "/settings", element: wrap(Settings) },
       { path: "/xueqiu", element: wrap(Xueqiu) },
       { path: "/monitor", element: wrap(Monitor) },
+      { path: "/logs", element: wrap(Logs) },
       { path: "/runs/:runId", element: wrap(RunDetail) },
       { path: "/compare", element: wrap(Compare) },
       { path: "/correlation", element: wrap(Correlation) },

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { Activity, BarChart3, Bot, FileText, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2, Menu, X } from "lucide-react";
+import { Activity, BarChart3, Bot, FileText, Languages, Moon, Sun, Plus, Trash2, Pencil, MessageSquare, ChevronsLeft, ChevronsRight, Settings, Layers, Loader2, Menu, X, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { api, isAuthRequiredError, type SessionItem, type UserProfile } from "@/lib/api";
@@ -11,7 +11,7 @@ import { AuthBarrier } from "@/components/layout/AuthBarrier";
 import { setApiAuthKey } from "@/lib/apiAuth";
 
 // Bump on each release; one place keeps the footer in sync with package.json.
-const APP_VERSION = "v0.1.10.cnx.1.2";
+const APP_VERSION = "v0.1.10.cnx.1.3";
 
 export function Layout() {
   const { t, i18n: i18nHook } = useTranslation();
@@ -40,7 +40,12 @@ export function Layout() {
     { to: "/reports", icon: FileText, label: t('layout.reports') },
     { to: "/alpha-zoo", icon: Layers, label: t('layout.alphaZoo') },
     { to: "/xueqiu", icon: Activity, label: i18nHook.language === "zh-CN" ? "雪球监控" : "Xueqiu Watcher" },
-    ...(profile?.is_local ? [{ to: "/monitor", icon: Activity, label: i18nHook.language === "zh-CN" ? "服务看板" : "Monitor" }] : []),
+    ...(profile?.is_local
+      ? [
+          {to: "/monitor", icon: Activity, label: i18nHook.language === "zh-CN" ? "服务看板" : "Monitor"},
+          { to: "/logs", icon: Terminal, label: i18nHook.language === "zh-CN" ? "运行日志" : "Runtime Logs" },
+        ]
+      : []),
     { to: "/settings", icon: Settings, label: t('layout.settings') },
     { to: "/correlation", icon: BarChart3, label: t('layout.correlation') },
   ];
