@@ -48,6 +48,29 @@ SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 AGENT_DIR = Path(__file__).resolve().parent
 
+def _get_sessions_dir() -> Path:
+    from src.config.paths import active_tenant_var, get_runtime_root
+    tenant = active_tenant_var.get() or "default"
+    if tenant == "default":
+        return SESSIONS_DIR
+    return get_runtime_root() / "sessions"
+
+
+def _get_runs_dir() -> Path:
+    from src.config.paths import active_tenant_var, get_runtime_root
+    tenant = active_tenant_var.get() or "default"
+    if tenant == "default":
+        return RUNS_DIR
+    return get_runtime_root() / "runs"
+
+
+def _get_uploads_dir() -> Path:
+    from src.config.paths import active_tenant_var, get_runtime_root
+    tenant = active_tenant_var.get() or "default"
+    if tenant == "default":
+        return UPLOADS_DIR
+    return get_runtime_root() / "uploads"
+
 class _DynamicEnvPath(type(Path())):
     def __new__(cls):
         return super().__new__(cls, Path.home() / ".vibe-trading-cnx" / ".env")
@@ -2135,7 +2158,7 @@ async def get_run_code(run_id: str):
         Map filename -> source text.
     """
     _validate_path_param(run_id, "run_id")
-    run_dir = RUNS_DIR / run_id / "code"
+    run_dir = _get_runs_dir() / run_id / "code"
     if not run_dir.exists():
         raise HTTPException(status_code=404, detail=f"Code directory for run {run_id} not found")
     result = {}
@@ -2157,7 +2180,7 @@ async def get_run_pine(run_id: str):
         Object with pine script content and exists flag.
     """
     _validate_path_param(run_id, "run_id")
-    pine_path = RUNS_DIR / run_id / "artifacts" / "strategy.pine"
+    pine_path = _get_runs_dir() / run_id / "artifacts" / "strategy.pine"
     if not pine_path.exists():
         return {"exists": False, "content": None}
     return {
@@ -2183,7 +2206,7 @@ async def get_run_result(
     _validate_path_param(run_id, "run_id")
     if chart_payload not in (None, "summary"):
         raise HTTPException(status_code=400, detail="invalid chart_payload")
-    run_dir = RUNS_DIR / run_id
+    run_dir = _get_runs_dir() / run_id
 
     if not run_dir.exists():
         raise HTTPException(
@@ -2214,7 +2237,7 @@ async def get_run_result(
 async def list_runs(limit: int = 20):
     """List recent runs with summary fields."""
     limit = min(max(1, limit), 100)
-    runs_dir = RUNS_DIR
+    runs_dir = _get_runs_dir()
 
     if not runs_dir.exists():
         return []
@@ -2580,17 +2603,19 @@ async def get_monitor_stats():
     
     # 2. Total sessions
     total_sessions = 0
-    if SESSIONS_DIR.exists():
+    sessions_dir = _get_sessions_dir()
+    if sessions_dir.exists():
         try:
-            total_sessions = sum(1 for d in SESSIONS_DIR.iterdir() if d.is_dir())
+            total_sessions = sum(1 for d in sessions_dir.iterdir() if d.is_dir())
         except Exception:
             pass
             
     # 3. Total runs
     total_runs = 0
-    if RUNS_DIR.exists():
+    runs_dir = _get_runs_dir()
+    if runs_dir.exists():
         try:
-            total_runs = sum(1 for d in RUNS_DIR.iterdir() if d.is_dir())
+            total_runs = sum(1 for d in runs_dir.iterdir() if d.is_dir())
         except Exception:
             pass
             
@@ -4110,15 +4135,24 @@ async def api_info():
 # Session API
 # ============================================================================
 
-_session_service = None
-_goal_store = None
+_session_services: dict[str, Any] = {}
+_goal_stores: dict[str, Any] = {}
+_session_service = True  # Dummy truthy value for test compatibility
+_goal_store = True       # Dummy truthy value for test compatibility
 
 
 def _get_session_service():
     """Lazy-init session service when ENABLE_SESSION_RUNTIME=true."""
-    global _session_service
-    if _session_service is not None:
-        return _session_service
+    global _session_service, _session_services
+    if _session_service is None:
+        _session_services.clear()
+        _session_service = True
+
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get() or "default"
+
+    if tenant in _session_services:
+        return _session_services[tenant]
 
     if os.getenv("ENABLE_SESSION_RUNTIME", "true").lower() != "true":
         return None
@@ -4128,7 +4162,7 @@ def _get_session_service():
     from src.session.events import EventBus
     from src.session.service import SessionService
 
-    store = SessionStore(base_dir=SESSIONS_DIR)
+    store = SessionStore(base_dir=_get_sessions_dir())
     event_bus = EventBus()
 
     try:
@@ -4137,22 +4171,33 @@ def _get_session_service():
     except RuntimeError:
         pass
 
-    _session_service = SessionService(
+    svc = SessionService(
         store=store,
         event_bus=event_bus,
-        runs_dir=RUNS_DIR,
+        runs_dir=_get_runs_dir(),
     )
-    return _session_service
+    _session_services[tenant] = svc
+    return svc
 
 
 def _get_goal_store():
     """Return the shared finance goal store."""
-    global _goal_store
+    global _goal_store, _goal_stores
     if _goal_store is None:
-        from src.goal import GoalStore
+        _goal_stores.clear()
+        _goal_store = True
 
-        _goal_store = GoalStore()
-    return _goal_store
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get() or "default"
+
+    if tenant in _goal_stores:
+        return _goal_stores[tenant]
+
+    from src.goal import GoalStore
+
+    store = GoalStore()
+    _goal_stores[tenant] = store
+    return store
 
 
 def _get_existing_session_or_404(session_id: str):
@@ -4637,11 +4682,12 @@ async def upload_file(file: UploadFile):
         )
 
     safe_name = f"{uuid.uuid4().hex}{ext}"
-    dest = UPLOADS_DIR / safe_name
+    uploads_dir = _get_uploads_dir()
+    dest = uploads_dir / safe_name
     total_size = 0
 
     try:
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        uploads_dir.mkdir(parents=True, exist_ok=True)
         with dest.open("wb") as handle:
             while True:
                 chunk = await file.read(_UPLOAD_CHUNK_SIZE)

@@ -241,3 +241,27 @@ def get_data_dir(config_path: Path | None = None) -> Path:
     data_dir = get_config_path(config_path).parent
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
+
+
+def get_sessions_dir() -> Path:
+    """Return the sessions directory for the active tenant."""
+    tenant = active_tenant_var.get()
+    if tenant == "default":
+        return Path(__file__).resolve().parents[2] / "sessions"
+    return get_runtime_root() / "sessions"
+
+
+def get_runs_dir() -> Path:
+    """Return the runs directory for the active tenant."""
+    tenant = active_tenant_var.get()
+    if tenant == "default":
+        return Path(__file__).resolve().parents[2] / "runs"
+    return get_runtime_root() / "runs"
+
+
+def get_uploads_dir() -> Path:
+    """Return the uploads directory for the active tenant."""
+    tenant = active_tenant_var.get()
+    if tenant == "default":
+        return Path(__file__).resolve().parents[2] / "uploads"
+    return get_runtime_root() / "uploads"

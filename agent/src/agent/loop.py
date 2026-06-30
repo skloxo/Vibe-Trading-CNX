@@ -45,6 +45,8 @@ from src.providers.content_filter import (
 from src.tools.background_tools import get_background_manager
 from src.tools.redaction import redact_payload
 
+from src.config.paths import get_sessions_dir, get_runs_dir
+
 RUNS_DIR = Path(__file__).resolve().parents[2] / "runs"
 SESSIONS_DIR = Path(__file__).resolve().parents[2] / "sessions"
 TOKEN_THRESHOLD = int(os.getenv("TOKEN_THRESHOLD", "40000"))
@@ -495,12 +497,21 @@ class AgentLoop:
         self._previous_summary = ""
 
         state_store = RunStateStore()
-        RUNS_DIR.mkdir(parents=True, exist_ok=True)
+        from src.config.paths import active_tenant_var, get_runtime_root
+        tenant = active_tenant_var.get() or "default"
+        if tenant == "default":
+            runs_dir = RUNS_DIR
+            sessions_dir = SESSIONS_DIR
+        else:
+            runs_dir = get_runtime_root() / "runs"
+            sessions_dir = get_runtime_root() / "sessions"
+
+        runs_dir.mkdir(parents=True, exist_ok=True)
 
         if self.memory.run_dir and Path(self.memory.run_dir).exists():
             run_dir = Path(self.memory.run_dir)
         else:
-            run_dir = state_store.create_run_dir(RUNS_DIR)
+            run_dir = state_store.create_run_dir(runs_dir)
             self.memory.run_dir = str(run_dir)
 
         state_store.save_request(run_dir, user_message, {"session_id": session_id})
@@ -519,7 +530,7 @@ class AgentLoop:
         messages = context.build_messages(llm_user_message, history)
         react_trace: List[Dict[str, Any]] = []
 
-        trace_dir = SESSIONS_DIR / session_id if session_id else run_dir
+        trace_dir = sessions_dir / session_id if session_id else run_dir
         trace = TraceWriter(trace_dir)
         if self._run_iteration == 0 and trace.path.exists():
             existing = TraceWriter.read(trace_dir)
