@@ -1,9 +1,9 @@
 import i18n from "@/i18n";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Database, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, Copy, Check, QrCode } from "lucide-react";
+import { Database, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Server, SlidersHorizontal, Plus, Trash2, Edit, Power, QrCode, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { api, isAuthRequiredError, type DataSourceSettings, type FeatureFlagsResponse, type LLMProviderOption, type LLMSettings, type FeishuChannel, type WechatChannel, type UserProfile } from "@/lib/api";
-import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
+import { setApiAuthKey } from "@/lib/apiAuth";
 import { createPortal } from "react-dom";
 import { AuthBarrier } from "@/components/layout/AuthBarrier";interface LLMFormState {
   provider: string;
@@ -37,7 +37,6 @@ export function Settings() {
   const [dataSettings, setDataSettings] = useState<DataSourceSettings | null>(null);
   const [form, setForm] = useState<LLMFormState | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [localApiKey, setLocalApiKeyState] = useState(() => getApiAuthKey());
   const [clearApiKey, setClearApiKey] = useState(false);
   const [tushareToken, setTushareToken] = useState("");
   const [clearTushareToken, setClearTushareToken] = useState(false);
@@ -45,6 +44,15 @@ export function Settings() {
   const [clearIwencaiKey, setClearIwencaiKey] = useState(false);
   const [fredApiKey, setFredApiKey] = useState("");
   const [clearFredApiKey, setClearFredApiKey] = useState(false);
+  const [thsCookie, setThsCookie] = useState("");
+  const [clearThsCookie, setClearThsCookie] = useState(false);
+  const [thsTesting, setThsTesting] = useState(false);
+  const [thsTestResult, setThsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [thsSaving, setThsSaving] = useState(false);
+  const [thsSavedOk, setThsSavedOk] = useState(false);
+  const [thsSyncing, setThsSyncing] = useState(false);
+  const [thsSyncResult, setThsSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const [featureFlags, setFeatureFlags] = useState<FeatureFlagsResponse | null>(null);
   
   // Feishu platforms settings states
@@ -98,12 +106,7 @@ export function Settings() {
   const [tenantLLM, setTenantLLM] = useState<LLMSettings | null>(null);
   const [tenantData, setTenantData] = useState<DataSourceSettings | null>(null);
 
-  // Tenant self-registration modal states
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [registerNickname, setRegisterNickname] = useState("");
-  const [registering, setRegistering] = useState(false);
-  const [registeredResult, setRegisteredResult] = useState<{ key: string; name: string; tenant_id: string } | null>(null);
-  const [isRegisterCopied, setIsRegisterCopied] = useState(false);
+
 
 
 
@@ -281,7 +284,93 @@ export function Settings() {
     }
   };
 
+  const submitThsSync = async (event: FormEvent, clearMode?: boolean) => {
+    event.preventDefault();
+    setThsSaving(true);
+    setThsSavedOk(false);
+    try {
+      const isDefault = activeSubTab === "user" && dataMode === "default";
+      const doClear = clearMode ?? clearThsCookie;
+      const updated = await api.updateDataSourceSettings({
+        ths_cookie: isDefault || doClear ? "" : thsCookie.trim() || undefined,
+        clear_ths_cookie: isDefault ? true : doClear,
+      });
+      setDataSettings(updated);
+      setThsCookie("");
+      setClearThsCookie(false);
+      setThsTestResult(null);
+      if (activeSubTab === "project") {
+        setGlobalData(updated);
+      } else {
+        setTenantData(updated);
+      }
+      setThsSavedOk(true);
+      setTimeout(() => setThsSavedOk(false), 3000);
+      toast.success(doClear ? "同花顺 Cookie 已清除" : "同花顺自选股同步设置保存成功");
+    } catch (error) {
+      toast.error("保存同花顺同步设置失败: " + (error instanceof Error ? error.message : "未知错误"));
+    } finally {
+      setThsSaving(false);
+    }
+  };
+
+  const handleClearThsCookie = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (!confirm("确定要清除已保存的同花顺 Cookie 吗？")) return;
+    // Create a synthetic form event for submitThsSync
+    const fakeEvent = { preventDefault: () => {} } as FormEvent;
+    await submitThsSync(fakeEvent, true);
+  };
+
+  const handleTestThsConnection = async () => {
+    const cookieToTest = thsCookie.trim();
+    if (!cookieToTest) {
+      toast.error("请输入同花顺 Cookie 后再测试连接");
+      return;
+    }
+    setThsTesting(true);
+    setThsTestResult(null);
+    try {
+      const res = await api.testThsCookie(cookieToTest);
+      setThsTestResult(res);
+      if (res.success) {
+        toast.success("同花顺 Cookie 测试连接成功！");
+      } else {
+        toast.error("同花顺 Cookie 测试连接失败！");
+      }
+    } catch (error) {
+      setThsTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : "测试请求失败",
+      });
+      toast.error("测试请求出错");
+    } finally {
+      setThsTesting(false);
+    }
+  };
+
+  const handleManualThsSync = async () => {
+    setThsSyncing(true);
+    setThsSyncResult(null);
+    try {
+      const res = await api.triggerThsSync();
+      setThsSyncResult(res);
+      if (res.success) {
+        toast.success("同花顺自选股手动同步成功");
+      } else {
+        toast.error("手动同步失败: " + res.message);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "未知错误";
+      setThsSyncResult({ success: false, message: msg });
+      toast.error("手动同步失败: " + msg);
+    } finally {
+      setThsSyncing(false);
+    }
+  };
+
   const openAddModal = () => {
+
     setEditingChannel(null);
     setChanName("");
     setChanEnabled(true);
@@ -544,109 +633,9 @@ export function Settings() {
     };
   }, [isWechatModalOpen, wechatChanMode, showTransientScanner]);
 
-  const handleRegisterTenant = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!registerNickname.trim()) return;
-    setRegistering(true);
-    try {
-      const result = await api.registerTenant({ name: registerNickname.trim() });
-      setRegisteredResult(result);
-      toast.success("注册成功！请复制并妥善保存您的密钥。");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "注册失败");
-    } finally {
-      setRegistering(false);
-    }
-  };
 
-  const identityStatusCard = (
-    <div className="rounded-lg border bg-card p-5 shadow-sm space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-500">
-              <KeyRound className="h-4 w-4" />
-            </div>
-            <h2 className="text-base font-semibold">租户身份卡片</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {profile?.role === "admin" && profile?.is_local
-              ? "您当前处于本地管理员租户空间 (默认)。"
-              : `当前登录身份：${profile?.name || "未知租户"} (ID: ${profile?.tenant_id || "未知"})`}
-          </p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-          {profile?.tenant_id && (
-            <span className="text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">
-              租户ID: {profile.tenant_id}
-            </span>
-          )}
-          {profile?.name && (
-            <span className="text-xs bg-muted text-muted-foreground border px-2.5 py-1 rounded-full font-medium">
-              昵称: {profile.name}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setRegisterNickname("");
-              setRegisteredResult(null);
-              setIsRegisterModalOpen(true);
-            }}
-            className="inline-flex items-center justify-center gap-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1 text-xs font-medium transition cursor-pointer"
-          >
-            <Plus className="h-3 w-3" />
-            注册新租户
-          </button>
-        </div>
-      </div>
 
-      <form onSubmit={(e) => {
-        e.preventDefault();
-        if (!localApiKey.trim()) return;
-        setApiAuthKey(localApiKey.trim());
-        toast.success("正在验证新密钥...");
-        window.location.reload();
-      }} className="grid gap-4 md:grid-cols-[1fr_auto_auto]">
-        <div className="space-y-1.5 flex-1">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-            更换租户身份 (输入租户密钥)
-          </label>
-          <input
-            type="password"
-            value={localApiKey}
-            onChange={(event) => setLocalApiKeyState(event.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-            placeholder="请输入您的租户密钥来切换/验证身份"
-          />
-        </div>
-        <div className="flex gap-2 self-end">
-          <button
-            type="submit"
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 cursor-pointer"
-          >
-            <Save className="h-4 w-4" />
-            保存并登录
-          </button>
-          {getApiAuthKey() && (
-            <button
-              type="button"
-              onClick={() => {
-                setApiAuthKey("");
-                toast.success("已注销当前身份，恢复为本地访问");
-                window.location.reload();
-              }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-md border hover:bg-destructive/10 hover:text-destructive px-4 py-2 text-sm font-medium transition cursor-pointer"
-            >
-              <Power className="h-4 w-4" />
-              退出登录
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
-  );
 
   if (authFailed) {
     return (
@@ -1016,6 +1005,8 @@ export function Settings() {
                   </div>
                 </label>
 
+
+
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{i18n.t("settings.saved")}: </span>
                   <span className="break-all font-mono">{dataSettings.env_path}</span>
@@ -1106,8 +1097,6 @@ export function Settings() {
       ) : (
         /* activeSubTab === "user": Tenant Settings View */
         <div className="space-y-6">
-          {/* Identity Status Card */}
-          {identityStatusCard}
 
           {/* Feishu Bot Channels Settings Card */}
           <div className="rounded-lg border bg-card p-5 shadow-sm space-y-4">
@@ -1709,6 +1698,170 @@ export function Settings() {
               </div>
             )}
           </form>
+
+          {/* 同花顺自选同步设置 (用户独立配置卡片) */}
+          <form onSubmit={submitThsSync} className="rounded-lg border bg-card p-5 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  <h2 className="text-base font-semibold">同花顺自选股同步设置</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">配置您的同花顺个人网页端 Cookie，用于同步云端自选股与本地 Watchlist 数据库。</p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+              <div className="grid gap-4">
+                <label className="grid gap-2">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    同花顺 Cookie
+                    {dataSettings.ths_cookie_configured && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500 ring-1 ring-inset ring-emerald-500/20">
+                        ✓ 已配置
+                      </span>
+                    )}
+                    {thsSavedOk && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-500 ring-1 ring-inset ring-emerald-500/30 animate-in fade-in duration-300">
+                        ✓ 已保存
+                      </span>
+                    )}
+                  </span>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="password"
+                      value={thsCookie}
+                      onChange={(event) => setThsCookie(event.target.value)}
+                      className={`${fieldClass} pl-9`}
+                      placeholder={dataSettings.ths_cookie_configured ? "已配置，输入以替换旧 Cookie" : "请输入同花顺个人 Cookie"}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <span className={hintClass}>用于同花顺云端自选股与本地 Watchlist 的双向同步</span>
+                </label>
+
+                <div className="flex flex-col gap-2 rounded-md bg-muted/20 p-3 border border-border/40">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">测试同花顺 Cookie 是否有效：</span>
+                    <button
+                      type="button"
+                      onClick={handleTestThsConnection}
+                      disabled={thsTesting}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md border border-border bg-background hover:bg-muted text-foreground transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {thsTesting ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          测试中...
+                        </>
+                      ) : (
+                        "测试连接"
+                      )}
+                    </button>
+                  </div>
+
+                  {thsTestResult && (
+                    <div className={`text-xs rounded p-2 ${thsTestResult.success ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-destructive/10 text-destructive border border-destructive/20"}`}>
+                      {thsTestResult.success ? "✅ " : "❌ "}
+                      {thsTestResult.message}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={thsSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70 cursor-pointer shadow-sm"
+                  >
+                    {thsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {thsSaving ? "保存中..." : "保存同花顺设置"}
+                  </button>
+
+                  {dataSettings.ths_cookie_configured && (
+                    <button
+                      type="button"
+                      onClick={handleClearThsCookie}
+                      disabled={thsSaving}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      清除 Cookie
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* 手动同步区域 */}
+                {dataSettings.ths_cookie_configured && (
+                  <div className="rounded-md border border-border/40 bg-muted/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-foreground">手动同步</span>
+                      <button
+                        type="button"
+                        onClick={handleManualThsSync}
+                        disabled={thsSyncing}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md border border-border bg-background hover:bg-muted text-foreground transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {thsSyncing ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            同步中...
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="h-3 w-3" />
+                            立即同步自选股
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {thsSyncResult && (
+                      <div className={`text-xs rounded p-2 ${thsSyncResult.success ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-destructive/10 text-destructive border border-destructive/20"}`}>
+                        {thsSyncResult.success ? "✅ " : "❌ "}{thsSyncResult.message}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 自动同步机制说明 */}
+                <details className="group rounded-md border border-border/40 bg-muted/10">
+                  <summary className="flex cursor-pointer items-center justify-between p-3 text-xs font-medium text-muted-foreground hover:text-foreground">
+                    <span>⏱️ 自动同步机制</span>
+                    <span className="transition group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="p-3 pt-0 text-xs text-muted-foreground space-y-2 border-t border-border/30">
+                    <p className="font-medium text-foreground">双向同步：同花顺 ⇄ Vibe-Trading</p>
+                    <ul className="space-y-1 pl-2">
+                      <li>• 在 Vibe-Trading 新增/删除自选股 → 自动推送到同花顺云端</li>
+                      <li>• 在同花顺 App/网页修改自选股 → 自动同步到本地</li>
+                    </ul>
+                    <p className="font-medium text-foreground pt-1">轮询频率</p>
+                    <ul className="space-y-1 pl-2">
+                      <li>• 📈 <span className="text-foreground font-medium">交易日盘中</span>（周一–五 09:30–15:00）—— 每 <span className="text-foreground font-medium">5 分钟</span></li>
+                      <li>• 🌙 <span className="text-foreground font-medium">盘前/盘后及周末</span> —— 每 <span className="text-foreground font-medium">30 分钟</span></li>
+                    </ul>
+                    <p className="text-[10px] text-muted-foreground/60 pt-1">🔒 写接口仅在检测到本地变化时才调用，不主动超频请求</p>
+                  </div>
+                </details>
+
+                {/* 如何获取 Cookie */}
+                <details open className="group rounded-md border border-border/40 bg-muted/10">
+                  <summary className="flex cursor-pointer items-center justify-between p-3 text-xs font-medium text-muted-foreground hover:text-foreground">
+                    <span>💡 如何获取同花顺 Cookie？（仅需3步）</span>
+                    <span className="transition group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="p-3 pt-0 text-xs text-muted-foreground space-y-2 border-t border-border/30">
+                    <p>1. 在电脑浏览器上访问并登录 <a href="http://stock.10jqka.com.cn/" target="_blank" rel="noreferrer" className="text-primary hover:underline font-medium">同花顺个人中心</a>。</p>
+                    <p>2. 登录成功后，按键盘的 <strong>F12</strong> 键（或右击网页任意空白处选择"检查"），切换到 <strong>"网络 (Network)"</strong> 面板。</p>
+                    <p>3. 刷新一下页面，在网络请求列表中点击任意以 <code>10jqka.com.cn</code> 结尾的请求，在右侧 <strong>"请求标头 (Request Headers)"</strong> 中找到 <code>Cookie</code>，完整复制其对应的一长串值，粘贴到上方输入框保存即可。</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 
@@ -2033,105 +2186,6 @@ export function Settings() {
         document.body
       )}
 
-
-
-      {/* Tenant Registration Modal */}
-      {isRegisterModalOpen && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-semibold mb-4 text-foreground">
-              {registeredResult ? "注册成功" : "自助注册新租户"}
-            </h3>
-
-            {registeredResult ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  恭喜您注册成功！您的专有密钥已生成。该密钥<strong>仅在此展示一次</strong>，请立即复制并妥善保存：
-                </p>
-                <div className="flex gap-2 items-center rounded-md border bg-muted/40 p-3 font-mono text-sm break-all select-all text-emerald-500">
-                  <span className="flex-1">{registeredResult.key}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(registeredResult.key);
-                      setIsRegisterCopied(true);
-                      setTimeout(() => setIsRegisterCopied(false), 2000);
-                    }}
-                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition shrink-0"
-                    title="复制到剪贴板"
-                  >
-                    {isRegisterCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
-                
-                <div className="rounded bg-muted/50 p-2.5 text-xs space-y-1">
-                  <div><span className="text-muted-foreground">租户昵称:</span> <strong className="text-foreground">{registeredResult.name}</strong></div>
-                  <div><span className="text-muted-foreground">租户 ID:</span> <strong className="text-foreground">{registeredResult.tenant_id}</strong></div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsRegisterModalOpen(false);
-                      setRegisteredResult(null);
-                    }}
-                    className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
-                  >
-                    关闭
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiAuthKey(registeredResult.key);
-                      setIsRegisterModalOpen(false);
-                      setRegisteredResult(null);
-                      window.location.reload();
-                    }}
-                    className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:opacity-90 px-4 py-2 text-sm font-medium transition cursor-pointer"
-                  >
-                    一键复制并自动登录
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleRegisterTenant} className="space-y-4">
-                <label className="grid gap-1.5">
-                  <span className={labelClass}>个性化昵称</span>
-                  <input
-                    type="text"
-                    required
-                    value={registerNickname}
-                    onChange={(e) => setRegisterNickname(e.target.value)}
-                    className={fieldClass}
-                    placeholder="请输入您的租户标识昵称"
-                  />
-                  <span className={hintClass}>限制 2-20 个字符，不能包含特殊字符。</span>
-                </label>
-
-                <div className="flex items-center justify-end gap-3 border-t pt-4 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setIsRegisterModalOpen(false)}
-                    className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
-                  >
-                    取消
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={registering}
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-70 transition cursor-pointer"
-                  >
-                    {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    {registering ? "注册中..." : "立即注册"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

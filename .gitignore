@@ -110,3 +110,12 @@ agent/stocks.db
 
 # Local helper/test scripts
 test_feishu_adapter.py
+
+# Reference folders and subprojects
+_reference/
+daily_stock_analysis/
+
+# Local helper/test scripts
+debug_ths*.py
+get_cookie.py
+

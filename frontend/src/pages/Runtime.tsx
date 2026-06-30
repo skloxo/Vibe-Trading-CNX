@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
+import { getApiAuthKey, setApiAuthKey } from "@/lib/apiAuth";
 import {
   Activity,
   AlertTriangle,
@@ -13,9 +16,19 @@ import {
   ShieldOff,
   Wifi,
   WifiOff,
+  KeyRound,
+  Plus,
+  Save,
+  Copy,
+  Check,
 } from "lucide-react";
-import { api, type LiveBrokerStatus, type LiveMandateLimits, type LiveStatus } from "@/lib/api";
+import { api, type LiveBrokerStatus, type LiveMandateLimits, type LiveStatus, type UserProfile } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+const fieldClass =
+  "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
+const labelClass = "text-sm font-medium";
+const hintClass = "text-xs text-muted-foreground";
 
 const RUNTIME_POLL_INTERVAL_MS = 15_000;
 const RUNTIME_CLOCK_INTERVAL_MS = 1_000;
@@ -31,6 +44,38 @@ export function Runtime() {
   const requestSeqRef = useRef(0);
   const mountedRef = useRef(false);
   const tRef = useRef(t);
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [localApiKey, setLocalApiKeyState] = useState(() => getApiAuthKey());
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [registerNickname, setRegisterNickname] = useState("");
+  const [registeredResult, setRegisteredResult] = useState<{ key: string; name: string; tenant_id: string } | null>(null);
+  const [isRegisterCopied, setIsRegisterCopied] = useState(false);
+  const [registering, setRegistering] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const p = await api.getSettingsProfile();
+      setProfile(p);
+    } catch (err) {
+      console.warn("Failed to load user profile", err);
+    }
+  }, []);
+
+  const handleRegisterTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!registerNickname.trim()) return;
+    setRegistering(true);
+    try {
+      const result = await api.registerTenant({ name: registerNickname.trim() });
+      setRegisteredResult(result);
+      toast.success("注册成功！请复制并妥善保存您的密钥。");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "注册失败");
+    } finally {
+      setRegistering(false);
+    }
+  };
 
   useEffect(() => {
     tRef.current = t;
@@ -67,6 +112,7 @@ export function Runtime() {
   useEffect(() => {
     mountedRef.current = true;
     loadStatus("initial");
+    loadProfile();
     const pollTimer = window.setInterval(() => loadStatus("refresh"), RUNTIME_POLL_INTERVAL_MS);
     const clockTimer = window.setInterval(() => setNowMs(Date.now()), RUNTIME_CLOCK_INTERVAL_MS);
     return () => {
@@ -77,9 +123,97 @@ export function Runtime() {
       window.clearInterval(pollTimer);
       window.clearInterval(clockTimer);
     };
-  }, [loadStatus]);
+  }, [loadStatus, loadProfile]);
 
 
+
+  const identityStatusCard = (
+    <div className="rounded-lg border bg-card p-5 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-500">
+              <KeyRound className="h-4 w-4" />
+            </div>
+            <h2 className="text-base font-semibold">租户身份卡片</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {profile?.role === "admin" && profile?.is_local
+              ? "您当前处于本地管理员租户空间 (默认)。"
+              : `当前登录身份：${profile?.name || "未知租户"} (ID: ${profile?.tenant_id || "未知"})`}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+          {profile?.tenant_id && (
+            <span className="text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">
+              租户ID: {profile.tenant_id}
+            </span>
+          )}
+          {profile?.name && (
+            <span className="text-xs bg-muted text-muted-foreground border px-2.5 py-1 rounded-full font-medium">
+              昵称: {profile.name}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setRegisterNickname("");
+              setRegisteredResult(null);
+              setIsRegisterModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1 text-xs font-medium transition cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            注册新租户
+          </button>
+        </div>
+      </div>
+
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        if (!localApiKey.trim()) return;
+        setApiAuthKey(localApiKey.trim());
+        toast.success("正在验证新密钥...");
+        window.location.reload();
+      }} className="grid gap-4 md:grid-cols-[1fr_auto_auto]">
+        <div className="space-y-1.5 flex-1">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+            更换租户身份 (输入租户密钥)
+          </label>
+          <input
+            type="password"
+            value={localApiKey}
+            onChange={(event) => setLocalApiKeyState(event.target.value)}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            placeholder="请输入您的租户密钥来切换/验证身份"
+          />
+        </div>
+        <div className="flex gap-2 self-end">
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 cursor-pointer"
+          >
+            <Save className="h-4 w-4" />
+            保存并登录
+          </button>
+          {getApiAuthKey() && (
+            <button
+              type="button"
+              onClick={() => {
+                setApiAuthKey("");
+                toast.success("已清除密钥，恢复默认管理员租户。");
+                window.location.reload();
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
+            >
+              清除登录密钥
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
 
   return (
     <div className="min-h-screen p-6 lg:p-8">
@@ -108,6 +242,9 @@ export function Runtime() {
             {t("runtime.refresh")}
           </button>
         </section>
+
+        {/* Render Identity Status Card */}
+        {identityStatusCard}
 
         {loading ? (
           <div className="grid gap-3 md:grid-cols-4">
@@ -148,6 +285,104 @@ export function Runtime() {
           </>
         ) : null}
       </div>
+
+      {/* Tenant Registration Modal */}
+      {isRegisterModalOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold mb-4 text-foreground">
+              {registeredResult ? "注册成功" : "自助注册新租户"}
+            </h3>
+
+            {registeredResult ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  恭喜您注册成功！您的专有密钥已生成。该密钥<strong>仅在此展示一次</strong>，请立即复制并妥善保存：
+                </p>
+                <div className="flex gap-2 items-center rounded-md border bg-muted/40 p-3 font-mono text-sm break-all select-all text-emerald-500">
+                  <span className="flex-1">{registeredResult.key}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(registeredResult.key);
+                      setIsRegisterCopied(true);
+                      setTimeout(() => setIsRegisterCopied(false), 2000);
+                    }}
+                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition shrink-0"
+                    title="复制到剪贴板"
+                  >
+                    {isRegisterCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+                
+                <div className="rounded bg-muted/50 p-2.5 text-xs space-y-1">
+                  <div><span className="text-muted-foreground">租户昵称:</span> <strong className="text-foreground">{registeredResult.name}</strong></div>
+                  <div><span className="text-muted-foreground">租户 ID:</span> <strong className="text-foreground">{registeredResult.tenant_id}</strong></div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsRegisterModalOpen(false);
+                      setRegisteredResult(null);
+                    }}
+                    className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
+                  >
+                    关闭
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiAuthKey(registeredResult.key);
+                      setIsRegisterModalOpen(false);
+                      setRegisteredResult(null);
+                      window.location.reload();
+                    }}
+                    className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:opacity-90 px-4 py-2 text-sm font-medium transition cursor-pointer"
+                  >
+                    一键复制并自动登录
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleRegisterTenant} className="space-y-4">
+                <label className="grid gap-1.5">
+                  <span className={labelClass}>个性化昵称</span>
+                  <input
+                    type="text"
+                    required
+                    value={registerNickname}
+                    onChange={(e) => setRegisterNickname(e.target.value)}
+                    className={fieldClass}
+                    placeholder="请输入您的租户标识昵称"
+                  />
+                  <span className={hintClass}>限制 2-20 个字符，不能包含特殊字符。</span>
+                </label>
+
+                <div className="flex items-center justify-end gap-3 border-t pt-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setIsRegisterModalOpen(false)}
+                    className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent px-4 py-2 text-sm font-medium transition cursor-pointer"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={registering}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-70 transition cursor-pointer"
+                  >
+                    {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {registering ? "注册中..." : "立即注册"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

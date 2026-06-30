@@ -61,7 +61,7 @@ export function Home() {
         
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold">
           <Activity className="h-3 w-3 animate-pulse" />
-          <span>v0.1.10.cnx.1.4 Stable</span>
+          <span>v0.1.10.cnx.1.5 Stable</span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-primary via-orange-500 to-amber-500 bg-clip-text text-transparent">
@@ -340,8 +340,18 @@ export function Home() {
               <div className="relative pl-4 border-l-2 border-primary/20">
                 <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-primary border-2 border-background animate-pulse" />
                 <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                  v0.1.10.cnx.1.4
+                  v0.1.10.cnx.1.5
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-normal">{isZh ? "已上线" : "Stable"}</span>
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {isZh ? "同花顺多租户双向自动/手动同步（交易日5分钟/其余30分钟自适应），秒级自选股实时监控，收盘数据维护与 Gap Healing 对账自愈。" : "Multi-tenant bi-directional Tonghuashun watchlist sync with smart scheduling, close maintenance with self-healing, and real-time alerts."}
+                </p>
+              </div>
+              <div className="relative pl-4 border-l-2 border-primary/20">
+                <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-primary/40 border-2 border-background" />
+                <h4 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
+                  v0.1.10.cnx.1.4
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "已上线" : "Stable"}</span>
                 </h4>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {isZh ? "平台级公用数据共享缓存层 (SharedMemoryHub)，开闭盘自适应调频，防御高频请求防封 IP。" : "Platform-level shared data hub, market hour adaptive polling, and A-share quote rate-limiting."}
@@ -391,41 +401,31 @@ export function Home() {
               <div className="relative pl-4 border-l-2 border-orange-500/20">
                 <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-orange-500 border-2 border-background animate-pulse" />
                 <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                  {isZh ? "共享行情缓存公库" : "Shared Memory Caching Hub"}
+                  {isZh ? "默认选股脚本可视化" : "Selection Script Visualization"}
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-normal">{isZh ? "进行中" : "In Progress"}</span>
                 </h4>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  {isZh ? "开发全局 SharedMemoryHub 行情定时轮询服务，保护多租户并发访问免于券商封 IP。" : "Thread-safe cache wheels index/sector quotes during trading hours to bypass broker IP limits."}
-                </p>
-              </div>
-              <div className="relative pl-4 border-l-2 border-orange-500/20">
-                <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-muted border-2 border-background" />
-                <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                  {isZh ? "同花顺自选股同步" : "Tonghuashun Watchlist Sync"}
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "计划中" : "Planned"}</span>
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {isZh ? "支持与同花顺云端自选列表进行 30s 高频双向自动实时同步。" : "30s bi-directional synchronization with Tonghuashun watchlist cloud data."}
-                </p>
-              </div>
-              <div className="relative pl-4 border-l-2 border-orange-500/20">
-                <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-muted border-2 border-background" />
-                <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                  {isZh ? "自选股秒级实时预警" : "Watchlist Real-time Alerts"}
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "计划中" : "Planned"}</span>
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {isZh ? "交易时间内对自选股进行实时盯盘，满足条件时毫秒级拼装并推送飞书/微信通知。" : "Instant watchlist monitoring and margin limit triggers with Feishu/WeChat push alerts."}
+                  {isZh ? "将租户已有的选股与复盘日报 Python 脚本搬上前端，一键点击执行与图文渲染。" : "Visualize historical screening and daily analysis scripts on Web UI with one-click run."}
                 </p>
               </div>
               <div className="relative pl-4 border-l-2 border-orange-500/20">
                 <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-muted border-2 border-background" />
                 <h4 className="text-xs font-semibold flex items-center gap-1.5">
                   {isZh ? "投委会多智能体 Debate 机制" : "Investment Committee Swarm Debate"}
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "规划中" : "Proposed"}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "计划中" : "Planned"}</span>
                 </h4>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {isZh ? "多智能体围绕持仓和选股在交易前进行辩论表决，输出防偏见多视角投研结论。" : "Multi-agent committee debates portfolio choices (bull vs bear) to generate unbiased proposals."}
+                </p>
+              </div>
+              <div className="relative pl-4 border-l-2 border-orange-500/20">
+                <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-muted border-2 border-background" />
+                <h4 className="text-xs font-semibold flex items-center gap-1.5">
+                  {isZh ? "VirtualBroker 模拟盘与做T网格推荐" : "VirtualBroker & Grid Recommendation"}
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-normal">{isZh ? "规划中" : "Proposed"}</span>
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {isZh ? "研发闭环模拟柜台与委托追踪，盘前自动生成个股网格策略建议。" : "Virtual counter broker for simulating orders with automated daily grid recommendations."}
                 </p>
               </div>
             </div>

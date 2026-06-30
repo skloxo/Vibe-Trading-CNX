@@ -138,6 +138,7 @@ export const api = {
       body: JSON.stringify(settings),
       ...options,
     }),
+  getFeatureFlags: (options?: RequestInit) => request<FeatureFlagsResponse>("/settings/feature-flags", options),
   getDataSourceSettings: (options?: RequestInit) => request<DataSourceSettings>("/settings/data-sources", options),
   updateDataSourceSettings: (settings: UpdateDataSourceSettingsRequest, options?: RequestInit) =>
     request<DataSourceSettings>("/settings/data-sources", {
@@ -145,7 +146,17 @@ export const api = {
       body: JSON.stringify(settings),
       ...options,
     }),
-  getFeatureFlags: (options?: RequestInit) => request<FeatureFlagsResponse>("/settings/feature-flags", options),
+  testThsCookie: (cookie: string, options?: RequestInit) =>
+    request<{ success: boolean; count?: number; message: string }>("/settings/ths/test", {
+      method: "POST",
+      body: JSON.stringify({ cookie }),
+      ...options,
+    }),
+  triggerThsSync: (options?: RequestInit) =>
+    request<{ success: boolean; message: string }>("/settings/ths/sync", {
+      method: "POST",
+      ...options,
+    }),
   getFeishuChannels: () => request<FeishuChannel[]>("/settings/platforms/feishu/channels"),
   createFeishuChannel: (channel: CreateFeishuChannelRequest) =>
     request<FeishuChannel>("/settings/platforms/feishu/channels", {
@@ -451,6 +462,8 @@ export interface DataSourceSettings {
   iwencai_key_hint?: string | null;
   fred_api_key_configured: boolean;
   fred_api_key_hint?: string | null;
+  ths_cookie_configured: boolean;
+  ths_cookie_hint?: string | null;
   baostock_supported: boolean;
   baostock_installed: boolean;
   baostock_message: string;
@@ -465,6 +478,8 @@ export interface UpdateDataSourceSettingsRequest {
   clear_iwencai_key?: boolean;
   fred_api_key?: string;
   clear_fred_api_key?: boolean;
+  ths_cookie?: string;
+  clear_ths_cookie?: boolean;
   use_default?: boolean;
 }
 

@@ -430,6 +430,8 @@ class DataSourceSettingsResponse(BaseModel):
     iwencai_key_hint: Optional[str] = None
     fred_api_key_configured: bool = False
     fred_api_key_hint: Optional[str] = None
+    ths_cookie_configured: bool = False
+    ths_cookie_hint: Optional[str] = None
     baostock_supported: bool
     baostock_installed: bool
     baostock_message: str
@@ -446,6 +448,8 @@ class UpdateDataSourceSettingsRequest(BaseModel):
     clear_iwencai_key: bool = False
     fred_api_key: Optional[str] = None
     clear_fred_api_key: bool = False
+    ths_cookie: Optional[str] = None
+    clear_ths_cookie: bool = False
     use_default: bool = False
 
 
@@ -1142,6 +1146,22 @@ async def _run_startup_preflight() -> None:
     except Exception as e:
         logger.error("[SharedMemoryHub] Failed to start cache refresher: %s", e)
 
+    # Initialize and start CloseDataMaintenanceService
+    try:
+        from src.market.close_maintenance import CloseDataMaintenanceService
+        CloseDataMaintenanceService().start()
+        logger.info("[CloseMaintenance] 收盘数据维护服务已在系统启动时载入。")
+    except Exception as e:
+        logger.error("[CloseMaintenance] 启动收盘数据维护服务失败: %s", e)
+
+    # Initialize and start ThsSyncService
+    try:
+        from src.market.ths_sync import ThsSyncService
+        ThsSyncService().start()
+        logger.info("[ThsSync] 同花顺同步服务已在系统启动时载入。")
+    except Exception as e:
+        logger.error("[ThsSync] 启动同花顺同步服务失败: %s", e)
+
 
 @app.on_event("shutdown")
 async def _stop_scheduled_research_on_shutdown() -> None:
@@ -1164,6 +1184,22 @@ async def _stop_scheduled_research_on_shutdown() -> None:
             logger.info("[Platform] Platforms manager stopped.")
         except Exception as e:
             logger.exception("[Platform] Error stopping platforms manager: %s", e)
+
+    # Stop CloseDataMaintenanceService
+    try:
+        from src.market.close_maintenance import CloseDataMaintenanceService
+        await CloseDataMaintenanceService().stop()
+        logger.info("[CloseMaintenance] 收盘数据维护服务已停止。")
+    except Exception as e:
+        logger.error("[CloseMaintenance] 停止收盘数据维护服务失败: %s", e)
+
+    # Stop ThsSyncService
+    try:
+        from src.market.ths_sync import ThsSyncService
+        await ThsSyncService().stop()
+        logger.info("[ThsSync] 同花顺同步服务已停止。")
+    except Exception as e:
+        logger.error("[ThsSync] 停止同花顺同步服务失败: %s", e)
 
     # Stop SharedMemoryHub and TdxGateway connection pool
     try:
@@ -1849,6 +1885,7 @@ def _baostock_installed() -> bool:
 
 IWENCAI_KEY_PLACEHOLDERS: set[str] = {"", "your-iwencai-key"}
 FRED_API_KEY_PLACEHOLDERS: set[str] = {"", "your-fred-api-key"}
+THS_COOKIE_PLACEHOLDERS: set[str] = {"", "your-ths-cookie"}
 
 
 def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None, is_public: bool = False) -> DataSourceSettingsResponse:
@@ -1867,6 +1904,8 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
     iwencai_key_configured = _is_configured_secret(iwencai_key, IWENCAI_KEY_PLACEHOLDERS)
     fred_key = env_values.get("FRED_API_KEY", "")
     fred_key_configured = _is_configured_secret(fred_key, FRED_API_KEY_PLACEHOLDERS)
+    ths_cookie = env_values.get("THS_COOKIE", "")
+    ths_cookie_configured = _is_configured_secret(ths_cookie, THS_COOKIE_PLACEHOLDERS)
     supported = _baostock_supported()
     installed = _baostock_installed()
     if supported:
@@ -1879,6 +1918,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
     tushare_token_hint = None
     iwencai_key_hint = None
     fred_api_key_hint = None
+    ths_cookie_hint = None
     if tenant != "default" and not is_public:
         tenant_env = Path.home() / ".vibe-trading-cnx" / "tenants" / tenant / ".env"
         tenant_vals = {}
@@ -1891,6 +1931,8 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
             iwencai_key_hint = "********"
         if fred_key_configured and not _is_configured_secret(tenant_vals.get("FRED_API_KEY", ""), FRED_API_KEY_PLACEHOLDERS):
             fred_api_key_hint = "********"
+        if ths_cookie_configured and not _is_configured_secret(tenant_vals.get("THS_COOKIE", ""), THS_COOKIE_PLACEHOLDERS):
+            ths_cookie_hint = "********"
 
     is_custom = True
     if tenant != "default":
@@ -1899,7 +1941,7 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
             is_custom = False
         else:
             tenant_vals = _read_env_values(tenant_env)
-            is_custom = any(k in tenant_vals for k in ["TUSHARE_TOKEN", "FRED_API_KEY", "VIBE_TRADING_IWENCAI_KEY"])
+            is_custom = any(k in tenant_vals for k in ["TUSHARE_TOKEN", "FRED_API_KEY", "VIBE_TRADING_IWENCAI_KEY", "THS_COOKIE"])
 
     return DataSourceSettingsResponse(
         tushare_token_configured=token_configured,
@@ -1908,6 +1950,8 @@ def _build_data_source_settings_response(values: Optional[Dict[str, str]] = None
         iwencai_key_hint=iwencai_key_hint,
         fred_api_key_configured=fred_key_configured,
         fred_api_key_hint=fred_api_key_hint,
+        ths_cookie_configured=ths_cookie_configured,
+        ths_cookie_hint=ths_cookie_hint,
         baostock_supported=supported,
         baostock_installed=installed,
         baostock_message=baostock_message,
@@ -2865,7 +2909,7 @@ async def update_data_source_settings(request: Request, payload: UpdateDataSourc
 
     if payload.use_default:
         if tenant != "default":
-            DATA_SOURCE_KEYS = ["TUSHARE_TOKEN", "VIBE_TRADING_IWENCAI_KEY", "FRED_API_KEY"]
+            DATA_SOURCE_KEYS = ["TUSHARE_TOKEN", "VIBE_TRADING_IWENCAI_KEY", "FRED_API_KEY", "THS_COOKIE"]
             _delete_env_values(ENV_PATH, DATA_SOURCE_KEYS)
             for key in DATA_SOURCE_KEYS:
                 os.environ.pop(key, None)
@@ -2922,6 +2966,18 @@ async def update_data_source_settings(request: Request, payload: UpdateDataSourc
     elif "FRED_API_KEY" in tenant_vals:
         updates["FRED_API_KEY"] = tenant_vals["FRED_API_KEY"]
 
+    if payload.clear_ths_cookie:
+        updates["THS_COOKIE"] = ""
+    elif payload.ths_cookie is not None and payload.ths_cookie.strip():
+        val = payload.ths_cookie.strip()
+        if val == "********":
+            if "THS_COOKIE" in tenant_vals:
+                updates["THS_COOKIE"] = tenant_vals["THS_COOKIE"]
+        else:
+            updates["THS_COOKIE"] = val
+    elif "THS_COOKIE" in tenant_vals:
+        updates["THS_COOKIE"] = tenant_vals["THS_COOKIE"]
+
 
     if updates:
         _write_env_values(ENV_PATH, updates)
@@ -2940,8 +2996,48 @@ async def update_data_source_settings(request: Request, payload: UpdateDataSourc
             os.environ["FRED_API_KEY"] = fred_key
         else:
             os.environ.pop("FRED_API_KEY", None)
+        ths_cookie = updates.get("THS_COOKIE", "").strip()
+        if _is_configured_secret(ths_cookie, THS_COOKIE_PLACEHOLDERS):
+            os.environ["THS_COOKIE"] = ths_cookie
+        else:
+            try:
+                del os.environ["THS_COOKIE"]
+            except KeyError:
+                pass
 
     return _build_data_source_settings_response(_read_env_values(ENV_PATH), is_public=is_public)
+
+
+@app.post("/settings/ths/test", dependencies=[Depends(require_settings_write_auth)])
+async def test_ths_cookie(payload: Dict[str, str]):
+    cookie = payload.get("cookie", "").strip()
+    if not cookie:
+        raise HTTPException(status_code=400, detail="Cookie cannot be empty")
+    from src.market.ths_sync import ThsSyncManager, ThsSyncService
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+    
+    loop = asyncio.get_running_loop()
+    manager = ThsSyncManager(tenant_id=tenant)
+    res = await loop.run_in_executor(None, manager.test_connection, cookie)
+    
+    if res.get("success"):
+        ThsSyncService()._failure_counts[tenant] = 0
+        
+    return res
+
+
+@app.post("/settings/ths/sync", dependencies=[Depends(require_settings_write_auth)])
+async def manual_ths_sync(request: Request):
+    """手动立即触发当前租户的同花顺自选股同步。"""
+    from src.market.ths_sync import ThsSyncService
+    from src.config.paths import active_tenant_var
+    tenant = active_tenant_var.get()
+    service = ThsSyncService()
+    result = await service.manual_sync_tenant(tenant)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "同步失败"))
+    return result
 
 
 FEISHU_SECRET_PLACEHOLDERS: set[str] = {"", "your-feishu-app-secret"}
