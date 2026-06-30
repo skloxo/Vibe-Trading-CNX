@@ -2242,11 +2242,19 @@ async def list_runs(limit: int = 20):
     limit = min(max(1, limit), 100)
     runs_dir = _get_runs_dir()
 
-    if not runs_dir.exists():
-        return []
+    candidates = {}
+    if runs_dir.exists():
+        for d in runs_dir.iterdir():
+            if d.is_dir():
+                candidates[d.name] = d
+
+    if RUNS_DIR.exists() and RUNS_DIR.resolve() != runs_dir.resolve():
+        for d in RUNS_DIR.iterdir():
+            if d.is_dir() and d.name not in candidates:
+                candidates[d.name] = d
 
     run_dirs = sorted(
-        [d for d in runs_dir.iterdir() if d.is_dir()],
+        candidates.values(),
         key=lambda x: x.name,
         reverse=True
     )
