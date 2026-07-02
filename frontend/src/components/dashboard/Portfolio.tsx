@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface PositionItem {
   code: string;
   name: string;
@@ -14,6 +16,9 @@ interface PortfolioProps {
 }
 
 export function Portfolio({ data, netAsset }: PortfolioProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+
   const fallbackPositions: PositionItem[] = [
     { code: "300750", name: "宁德时代", shares: 8000, cost: 185.20, price: 218.40, profit: 26.56, profitRate: 17.92 },
     { code: "301550", name: "万丰奥威", shares: 45000, cost: 12.40, price: 16.28, profit: 17.46, profitRate: 31.29 },
@@ -28,7 +33,7 @@ export function Portfolio({ data, netAsset }: PortfolioProps) {
       <div className="flex justify-between items-center border-b border-border/60 pb-2">
         <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
-          💼 我的证券持仓明细 (PORTFOLIO)
+          💼 {isEn ? "Portfolio Positions" : "我的证券持仓明细"}
         </span>
         <span className="text-[10px] text-rose-400 font-mono bg-rose-500/10 px-2 py-0.5 border border-rose-500/20 rounded-sm font-bold uppercase tracking-wider">
           净资产: {displayNetAsset}

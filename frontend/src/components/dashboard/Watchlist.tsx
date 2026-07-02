@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface WatchItem {
   code: string;
   name: string;
@@ -11,6 +13,9 @@ interface WatchlistProps {
 }
 
 export function Watchlist({ data }: WatchlistProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+  
   const defaultWatchList: WatchItem[] = [
     { code: "300750", name: "宁德时代", price: 218.40, change: 2.00, sparkline: [20, 22, 19, 23, 27, 35, 42] },
     { code: "600519", name: "贵州茅台", price: 1650.00, change: 1.02, sparkline: [10, 8, 12, 14, 15, 18, 22] },
@@ -24,7 +29,9 @@ export function Watchlist({ data }: WatchlistProps) {
   return (
     <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 p-3 flex flex-col gap-2 h-full rounded shadow-sm dark:shadow-none">
       <div className="flex justify-between items-center border-b border-slate-200 dark:border-[#222233] pb-1.5">
-        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">⭐ 用户自选股列表 (WATCHLIST)</span>
+        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+          ⭐ {isEn ? "Watchlist" : "用户自选股列表"}
+        </span>
         <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">COUNT: {watchList.length}</span>
       </div>
 

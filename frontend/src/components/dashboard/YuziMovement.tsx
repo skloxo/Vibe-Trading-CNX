@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 interface YuziItem {
@@ -14,6 +15,9 @@ interface YuziMovementProps {
 }
 
 export function YuziMovement({ data }: YuziMovementProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+
   const fallbackList: YuziItem[] = [
     { name: "宁波解放路", stockName: "万丰奥威", stockCode: "301550", action: "buy", amount: 1.25, type: "一线游资" },
     { name: "呼家楼", stockName: "宁德时代", stockCode: "300750", action: "buy", amount: 2.80, type: "顶级席位" },
@@ -29,7 +33,7 @@ export function YuziMovement({ data }: YuziMovementProps) {
       <div className="flex justify-between items-center border-b border-border/60 pb-2">
         <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
-          🕵️ 游资盘中大单动向 (YUZI MOVEMENT)
+          🕵️ {isEn ? "Yuzi Movement" : "游资盘中大单动向"}
         </span>
         <span className="text-[8px] px-1.5 py-0.5 bg-rose-500/10 text-rose-400 rounded-sm font-mono border border-rose-500/20 uppercase tracking-widest animate-pulse">
           Live Feed

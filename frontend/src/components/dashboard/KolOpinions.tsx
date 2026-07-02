@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface KolItem {
   author: string;
   stockName: string;
@@ -13,6 +15,9 @@ interface KolOpinionsProps {
 }
 
 export function KolOpinions({ data }: KolOpinionsProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+
   const fallbackOpinions: KolItem[] = [
     { 
       author: "量化复盘大师", 
@@ -50,7 +55,7 @@ export function KolOpinions({ data }: KolOpinionsProps) {
       <div className="flex justify-between items-center border-b border-border/60 pb-2">
         <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
-          👥 热门大V盘中观点与情绪 (KOL SENTIMENT)
+          👥 {isEn ? "KOL Sentiments" : "热门大V盘中观点与情绪"}
         </span>
         <span className="text-[9px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 border border-rose-500/20 rounded-sm">
           SENTIMENT: BULLISH

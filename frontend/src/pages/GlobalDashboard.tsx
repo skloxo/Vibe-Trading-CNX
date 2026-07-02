@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { 
   Cpu, Terminal, Settings, Check, Lock, Unlock, Grid
 } from "lucide-react";
@@ -61,6 +62,9 @@ const DEFAULT_LAYOUTS = {
 };
 
 export function GlobalDashboard() {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+
   const [isPlaying, setIsPlaying] = useState(true);
   const [simProgress, setSimProgress] = useState(78);
   const [activeNode, setActiveNode] = useState<string | null>(null);
@@ -463,7 +467,7 @@ export function GlobalDashboard() {
               <div className="flex justify-between items-center border-b border-border/60 pb-2 mb-2 shrink-0">
                 <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
                   <Cpu className="h-3.5 w-3.5 text-rose-500" />
-                  ECharts 关系拓扑图谱 · 产业链关联网络 (FORCE GRAPH)
+                  ECharts {isEn ? "Relation Topology Graph" : "关系拓扑图谱 · 产业链关联网络"}
                 </span>
                 <span className="text-[8px] bg-emerald-50 dark:bg-[#00ff88]/10 text-emerald-650 dark:text-[#00ff88] border border-emerald-300 dark:border-[#00ff88]/30 px-1 py-0.2 rounded font-bold uppercase tracking-wider">
                   Live Stream
@@ -509,7 +513,7 @@ export function GlobalDashboard() {
           {enabledWidgets.lattice && isWidgetAllowed("lattice") && (
             <div key="lattice" className="border border-border/80 bg-card/90 backdrop-blur-md p-4 flex flex-col gap-2.5 h-full rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-rose-500/5">
               {!isLayoutLocked && <div className="drag-handle h-4 bg-slate-200 dark:bg-[#1a1a2e] cursor-move flex items-center justify-center"><Grid className="h-3 w-3 text-slate-400" /></div>}
-              <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">📈 概率格子 · 涨停突破概率分布 (PROBABILITY LATTICE)</span>
+              <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">📈 {isEn ? "Probability Lattice" : "概率格子 · 涨停突破概率分布"}</span>
               <div className="flex-1 flex flex-col gap-2.5 bg-muted/30 p-4 rounded-lg relative border border-border/40 min-h-[120px]">
                 <div className="absolute top-2 right-2 flex items-center gap-1.5 text-[8px] text-muted-foreground font-black tracking-wider uppercase">
                   <span className="inline-block w-2 h-2 bg-rose-500 rounded-full animate-pulse" /> 涨停成功
@@ -590,7 +594,7 @@ export function GlobalDashboard() {
               <div className="border-b border-border/60 px-3 py-2 flex justify-between items-center bg-muted/80 backdrop-blur-md shrink-0">
                 <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5 font-mono">
                   <Terminal className="h-3.5 w-3.5 text-rose-500" />
-                  OASIS 实时仿真终端 (MONITOR)
+                  OASIS {isEn ? "Real-time Simulation Terminal" : "实时仿真终端"}
                 </span>
                 <span className="text-[8px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-1 py-0.2 font-bold animate-pulse">
                   SIMULATING

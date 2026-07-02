@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Info, CheckCircle } from "lucide-react";
 
 interface AlertItem {
@@ -13,6 +14,9 @@ interface MobileAlertsProps {
 }
 
 export function MobileAlerts({ data }: MobileAlertsProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+
   const fallbackAlerts: AlertItem[] = [
     { time: "14:28:12", stockName: "万丰奥威", code: "301550", type: "breakout", message: "突破 5 日高点压力位 16.10 元" },
     { time: "14:27:04", stockName: "宁德时代", code: "300750", type: "volume", message: "盘中出现机构大单主买成交 1.5 亿" },
@@ -27,7 +31,7 @@ export function MobileAlerts({ data }: MobileAlertsProps) {
       <div className="flex justify-between items-center border-b border-border/60 pb-2">
         <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
-          🚨 盘中高频移动监控预警 (MONITOR ALERTS)
+          🚨 {isEn ? "High-Freq Alerts" : "盘中高频移动监控预警"}
         </span>
       </div>
 

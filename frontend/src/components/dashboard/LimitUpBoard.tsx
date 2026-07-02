@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface StockItem {
   code: string;
   name: string;
@@ -12,6 +14,9 @@ interface LimitUpBoardProps {
 }
 
 export function LimitUpBoard({ data }: LimitUpBoardProps) {
+  const { i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith("en");
+  
   const defaultStockList: StockItem[] = [
     { code: "300750", name: "宁德时代", price: 218.40, change: 20.00, boardCount: 2 },
     { code: "600519", name: "贵州茅台", price: 1650.00, change: 10.02, boardCount: 1 },
@@ -31,7 +36,9 @@ export function LimitUpBoard({ data }: LimitUpBoardProps) {
   return (
     <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 flex flex-col h-full overflow-hidden rounded shadow-sm dark:shadow-none">
       <div className="border-b border-slate-200 dark:border-[#222233] px-3 py-2 flex justify-between items-center bg-slate-50 dark:bg-[#12121e]">
-        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">🔥 涨停板追踪 (LIMIT-UP BOARD)</span>
+        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+          🔥 {isEn ? "Limit-Up Board" : "涨停板追踪"}
+        </span>
         <span className="text-[10px] px-1.5 py-0.5 bg-rose-50 dark:bg-[#ff3366]/10 text-rose-600 dark:text-[#ff3366] font-bold border border-rose-200 dark:border-transparent rounded">T+1</span>
       </div>
       <div className="flex-1 overflow-auto p-1.5 space-y-1">
