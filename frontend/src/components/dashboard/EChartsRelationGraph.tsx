@@ -127,11 +127,14 @@ export function EChartsRelationGraph({ onSelectNode, activeNode }: EChartsRelati
       backgroundColor: "transparent",
       tooltip: {
         trigger: "item",
-        extraCssText: `box-shadow: 0 4px 20px rgba(0,0,0,${isDark ? "0.5" : "0.12"});`,
+        backgroundColor: "transparent",
+        borderWidth: 0,
+        padding: 0,
+        extraCssText: `box-shadow: none;`,
         formatter: (params: any) => {
           if (params.dataType === "node") {
             const data = params.data;
-            return `<div style="background:${tooltipBg};border:1px solid ${tooltipBorder};padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.8;">
+            return `<div style="background:${tooltipBg};border:1px solid ${tooltipBorder};padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.8;box-shadow: 0 4px 20px rgba(0,0,0,${isDark ? "0.5" : "0.08"});">
               <span style="font-weight:bold;font-size:12px;color:${data.itemStyle?.color || '#00e5ff'}">${data.name}</span><br/>
               <span style="color:${tooltipSubText}">类型: <span style="color:${tooltipText}">${data.categoryName}</span></span><br/>
               <span style="color:${tooltipSubText}">详情: <span style="color:${tooltipText}">${data.value || "无数据"}</span></span>
