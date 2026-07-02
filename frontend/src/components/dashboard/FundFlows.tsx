@@ -25,8 +25,8 @@ export function FundFlows({ data }: FundFlowsProps) {
   const sectors = data && data.length > 0 ? data : defaultSectors;
 
   return (
-    <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 p-3 flex flex-col gap-2 h-full rounded shadow-sm dark:shadow-none">
-      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#222233] pb-1.5">📊 {isEn ? "Sector Fund Flows" : "热门板块资金净流入"}</span>
+    <div className="p-3.5 flex flex-col gap-2 h-full w-full">
+      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-border/60 pb-1.5">📊 {isEn ? "Sector Fund Flows" : "热门板块资金净流入"}</span>
       <div className="space-y-2.5 flex-1 overflow-auto">
         {sectors.map((sec) => {
           const isUp = sec.flow >= 0;

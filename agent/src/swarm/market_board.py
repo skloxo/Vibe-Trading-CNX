@@ -13,6 +13,41 @@ def get_most_recent_trading_day() -> str:
         now -= datetime.timedelta(days=2)
     return now.strftime("%Y-%m-%d")
 
+_static_names_cache = {}
+
+def get_static_stock_name(code: str) -> str or None:
+    global _static_names_cache
+    if not _static_names_cache:
+        try:
+            from pathlib import Path
+            import json
+            json_path = Path(__file__).resolve().parents[2] / "data" / "tdx_a_shares.json"
+            if json_path.exists():
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for item in data.get("stocks", []):
+                    c = item.get("code", "")
+                    n = item.get("name", "")
+                    if c and n:
+                        _static_names_cache[c] = n
+        except Exception:
+            pass
+    return _static_names_cache.get(code)
+
+def is_placeholder_name(name: str) -> bool:
+    if not name:
+        return True
+    name_str = str(name).strip()
+    if name_str.startswith("Stock ") or name_str.startswith("Stock"):
+        return True
+    if name_str.startswith("股票") and any(char.isdigit() for char in name_str):
+        return True
+    if name_str.startswith("代码") and any(char.isdigit() for char in name_str):
+        return True
+    if name_str.isdigit():
+        return True
+    return False
+
 def query_db_stock_names(codes: List[str]) -> Dict[str, str]:
     """Batch query stock Chinese names from the shared market database."""
     from src.config.paths import get_market_db_path
@@ -31,13 +66,20 @@ def query_db_stock_names(codes: List[str]) -> Dict[str, str]:
                 placeholders = ",".join("?" for _ in codes)
                 cursor.execute(f"SELECT code, name FROM stock_meta WHERE code IN ({placeholders})", codes)
                 for code, name in cursor.fetchall():
-                    if code not in results and name and not name.startswith("Stock "):
+                    if code not in results and name and not is_placeholder_name(name):
                         results[code] = name
                 conn.close()
             except Exception:
                 pass
         if len(results) == len(codes):
             break  # All found, no need to check legacy DB
+            
+    # Fallback to static JSON cache for any missing codes
+    for code in codes:
+        if code not in results:
+            name = get_static_stock_name(code)
+            if name:
+                results[code] = name
     return results
 
 def fetch_tencent_quotes(symbols: List[str]) -> List[Dict[str, Any]]:
@@ -75,7 +117,7 @@ def fetch_tencent_quotes(symbols: List[str]) -> List[Dict[str, Any]]:
                 symbols
             )
             for code, name in cursor.fetchall():
-                if name and not name.startswith("Stock "):
+                if name and not is_placeholder_name(name):
                     local_names[code] = name
             conn.close()
         except Exception:
@@ -97,7 +139,7 @@ def fetch_tencent_quotes(symbols: List[str]) -> List[Dict[str, Any]]:
                     missing
                 )
                 for code, name in cursor.fetchall():
-                    if code not in local_names and name and not name.startswith("Stock "):
+                    if code not in local_names and name and not is_placeholder_name(name):
                         local_names[code] = name
             # Query last close prices from daily kline
             for code in symbols:
@@ -115,52 +157,69 @@ def fetch_tencent_quotes(symbols: List[str]) -> List[Dict[str, Any]]:
             break
 
 
-    # 2. Call light-weight online API for current price and percentage change
-    query_parts = []
+    # Priority 3: Query static JSON cache for remaining missing names
     for s in symbols:
-        bare_code = s.split(".")[0].strip()
-        if not bare_code or not bare_code.isdigit():
-            continue
-        prefix = "sh" if bare_code.startswith("6") or bare_code.startswith("9") or bare_code.startswith("5") else "sz"
-        query_parts.append(f"{prefix}{bare_code}")
-    
-    url = f"https://qt.gtimg.cn/q={','.join(query_parts)}"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            content = response.read().decode("gbk", errors="ignore")
+        if s not in local_names:
+            name = get_static_stock_name(s)
+            if name:
+                local_names[s] = name
+
+    # 2. Call light-weight online API for current price and percentage change in chunks of 50
+    results = []
+    chunk_size = 50
+    for idx in range(0, len(symbols), chunk_size):
+        chunk = symbols[idx:idx + chunk_size]
+        query_parts = []
+        for s in chunk:
+            bare_code = s.split(".")[0].strip()
+            if not bare_code or not bare_code.isdigit():
+                continue
+            prefix = "sh" if bare_code.startswith("6") or bare_code.startswith("9") or bare_code.startswith("5") else "sz"
+            query_parts.append(f"{prefix}{bare_code}")
         
-        results = []
-        for line in content.split(";"):
-            line = line.strip()
-            if not line or "=" not in line:
-                continue
-            parts = line.split("=")
-            val = parts[1].strip('"')
-            fields = val.split("~")
-            if len(fields) < 6:
-                continue
-            try:
-                change_val = float(fields[32])
-            except ValueError:
-                change_val = 0.0
+        if not query_parts:
+            continue
             
-            code = fields[2]
-            name = local_names.get(code) or fields[1]
+        url = f"https://qt.gtimg.cn/q={','.join(query_parts)}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=8) as response:
+                content = response.read().decode("gbk", errors="ignore")
             
-            results.append({
-                "code": code,
-                "name": name,
-                "price": float(fields[3]),
-                "change": change_val,
-                "sparkline": [10, 15, 12, 18, 14, 22, 22 + change_val * 2]
-            })
-        return results
-    except Exception:
-        # 3. Fallback: network error, return metadata and last close prices from local DB
-        results = []
-        for code in symbols:
-            name = local_names.get(code) or f"代码 {code}"
+            for line in content.split(";"):
+                line = line.strip()
+                if not line or "=" not in line:
+                    continue
+                parts = line.split("=")
+                val = parts[1].strip('"')
+                fields = val.split("~")
+                if len(fields) < 6:
+                    continue
+                try:
+                    change_val = float(fields[32])
+                except ValueError:
+                    change_val = 0.0
+                
+                code = fields[2]
+                name = local_names.get(code) or fields[1]
+                
+                results.append({
+                    "code": code,
+                    "name": name,
+                    "price": float(fields[3]),
+                    "change": change_val,
+                    "sparkline": [10, 15, 12, 18, 14, 22, 22 + change_val * 2]
+                })
+        except Exception:
+            pass
+
+    # 3. Fallback: if we did not get results for some symbols (due to network failure, chunk errors, etc.),
+    # return metadata and last close prices from local DB or static map
+    success_codes = {r["code"] for r in results}
+    missing_symbols = [s for s in symbols if s not in success_codes]
+    if missing_symbols:
+        for code in missing_symbols:
+            name = local_names.get(code) or get_static_stock_name(code) or f"代码 {code}"
             price = local_prices.get(code) or 0.0
             results.append({
                 "code": code,
@@ -169,7 +228,8 @@ def fetch_tencent_quotes(symbols: List[str]) -> List[Dict[str, Any]]:
                 "change": 0.0,
                 "sparkline": [10, 10, 10, 10, 10, 10, 10]
             })
-        return results
+            
+    return results
 
 def fetch_eastmoney_sectors() -> List[Dict[str, Any]]:
     url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fields=f12,f14,f2,f3,f62&fid=f62&fs=m:90+t:2+f:!50"

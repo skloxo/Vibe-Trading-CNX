@@ -27,7 +27,7 @@ export function MobileAlerts({ data }: MobileAlertsProps) {
   const alerts = data && data.length > 0 ? data : fallbackAlerts;
 
   return (
-    <div className="border border-border/80 bg-card/90 backdrop-blur-md p-4.5 flex flex-col gap-3 h-full rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-rose-500/5">
+    <div className="p-4 flex flex-col gap-3 h-full w-full">
       <div className="flex justify-between items-center border-b border-border/60 pb-2">
         <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />

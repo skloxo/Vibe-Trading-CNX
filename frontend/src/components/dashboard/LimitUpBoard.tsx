@@ -34,15 +34,14 @@ export function LimitUpBoard({ data }: LimitUpBoardProps) {
   })) : defaultStockList;
 
   return (
-    <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 flex flex-col h-full overflow-hidden rounded shadow-sm dark:shadow-none">
-      <div className="border-b border-slate-200 dark:border-[#222233] px-3 py-2 flex justify-between items-center bg-slate-50 dark:bg-[#12121e]">
-        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+    <div className="flex flex-col h-full w-full">
+      <div className="border-b border-border/60 px-3.5 py-2 flex justify-between items-center bg-transparent shrink-0">
+        <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
           🔥 {isEn ? "Limit-Up Board" : "涨停板追踪"}
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 bg-rose-50 dark:bg-[#ff3366]/10 text-rose-600 dark:text-[#ff3366] font-bold border border-rose-200 dark:border-transparent rounded">T+1</span>
+        <span className="text-[9px] px-1.5 py-0.5 bg-rose-500/10 text-rose-400 rounded-sm font-mono border border-rose-500/20 uppercase tracking-widest">T+1</span>
       </div>
-
-      <div className="flex-1 overflow-auto p-1.5 space-y-1">
+      <div className="flex-1 overflow-auto p-3.5 space-y-1">
         {/* 表头 */}
         <div className="grid grid-cols-12 text-[9px] font-bold text-slate-400 dark:text-slate-500 px-2 py-1 border-b border-slate-100 dark:border-[#1f1f2e]">
           <span className="col-span-5">{isEn ? "Name / Code" : "名称 / 代码"}</span>

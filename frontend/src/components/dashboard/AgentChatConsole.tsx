@@ -59,7 +59,7 @@ export function AgentChatConsole() {
   };
 
   return (
-    <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 p-3 flex flex-col gap-2 rounded shadow-sm dark:shadow-none h-[320px]">
+    <div className="p-3.5 flex flex-col gap-2 h-full w-full">
       <div className="flex justify-between items-center border-b border-slate-200 dark:border-[#222233] pb-1.5 shrink-0">
         <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
           <MessageSquare className="h-3.5 w-3.5 text-[#00abc0] dark:text-[#00e5ff]" />

@@ -196,8 +196,8 @@ export function ReActTimeline() {
   };
 
   return (
-    <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 p-3 flex flex-col gap-2 rounded shrink-0 shadow-sm dark:shadow-none">
-      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#222233] pb-1.5 flex items-center gap-1.5">
+    <div className="p-3.5 flex flex-col gap-2 h-full w-full shrink-0">
+      <span className="text-[11px] font-black tracking-wider text-muted-foreground uppercase flex items-center gap-1.5 border-b border-border/60 pb-1.5 shrink-0">
         <Cpu className="h-3.5 w-3.5 text-rose-600 dark:text-[#ff3366]" />
         AI {isEn ? "ReACT Decision Timeline" : "研报 ReACT 思考时间轴"}
       </span>

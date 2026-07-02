@@ -27,7 +27,7 @@ export function Watchlist({ data }: WatchlistProps) {
   const watchList = data && data.length > 0 ? data : defaultWatchList;
 
   return (
-    <div className="border border-slate-200 dark:border-[#222233] bg-white dark:bg-[#10101a]/80 p-3 flex flex-col gap-2 h-full rounded shadow-sm dark:shadow-none">
+    <div className="p-3.5 flex flex-col gap-2 h-full w-full">
       <div className="flex justify-between items-center border-b border-slate-200 dark:border-[#222233] pb-1.5">
         <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
           ⭐ {isEn ? "Watchlist" : "用户自选股列表"}
